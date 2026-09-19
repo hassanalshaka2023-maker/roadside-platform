@@ -1,0 +1,30 @@
+# Postgres only, for local development with hot reload.
+#
+#   docker compose -f docker-compose.dev.yml up -d
+#   npm run db:migrate && npm run db:seed
+#   npm run dev
+#
+# The matching DATABASE_URL for .env:
+#   postgresql://roadside:roadside@localhost:5432/roadside?schema=public
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: roadside
+      # Development only. Never reuse this anywhere real.
+      POSTGRES_PASSWORD: roadside
+      POSTGRES_DB: roadside
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-dev-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U roadside"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres-dev-data:

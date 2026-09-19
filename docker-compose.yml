@@ -1,0 +1,77 @@
+# Full stack: Postgres + the app. For a VPS deployment.
+#
+# Migrations are a separate one-shot service so that starting the app never
+# silently changes the schema. Run them explicitly:
+#
+#   docker compose run --rm migrate
+#   docker compose up -d app
+#
+# NOTE: not yet verified - Docker is not installed on the development machine.
+
+services:
+  postgres:
+    image: postgres:18-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-roadside}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      POSTGRES_DB: ${POSTGRES_DB:-roadside}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-roadside}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # Not published to the host: only the app needs to reach it.
+    expose:
+      - "5432"
+
+  # One-shot. Built from the `builder` stage because that is the only one with
+  # the Prisma CLI and tsx.
+  migrate:
+    build:
+      context: .
+      target: builder
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-roadside}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-roadside}?schema=public
+      NODE_ENV: production
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD}
+      SEED_DISPATCHER_EMAIL: ${SEED_DISPATCHER_EMAIL}
+      SEED_DISPATCHER_PASSWORD: ${SEED_DISPATCHER_PASSWORD}
+    command: sh -c "npx prisma migrate deploy && npx prisma db seed"
+    restart: "no"
+
+  app:
+    build:
+      context: .
+      target: runner
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      APP_URL: ${APP_URL:?APP_URL is required}
+      DATABASE_URL: postgresql://${POSTGRES_USER:-roadside}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-roadside}?schema=public
+      SESSION_SECRET: ${SESSION_SECRET:?SESSION_SECRET is required}
+      OTP_HMAC_SECRET: ${OTP_HMAC_SECRET:?OTP_HMAC_SECRET is required}
+      # No real gateway yet, and the console driver refuses to run in
+      # production, so this must be "stub" until one is connected.
+      SMS_PROVIDER: ${SMS_PROVIDER:-stub}
+      RATE_LIMIT_DRIVER: postgres
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD}
+      SEED_DISPATCHER_EMAIL: ${SEED_DISPATCHER_EMAIL}
+      SEED_DISPATCHER_PASSWORD: ${SEED_DISPATCHER_PASSWORD}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      # Bound to localhost: nginx terminates TLS and proxies to it.
+      - "127.0.0.1:3000:3000"
+
+volumes:
+  postgres-data:
