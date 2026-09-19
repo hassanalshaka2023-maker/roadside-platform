@@ -1,0 +1,472 @@
+// Najdat Al-Tariq 24 - database schema
+//
+// The whole domain is modelled up front (phases 1-6) so later phases only add
+// columns, never restructure tables. Anything not used in phase 1 is still
+// created now: empty tables cost nothing, migrations on live data do.
+//
+// Conventions:
+//   - uuid primary keys, so ids are safe to expose in URLs and logs
+//   - every table carries createdAt/updatedAt
+//   - indexes on foreign keys and on anything we filter or sort by
+//     (status, city, phone, createdAt)
+//   - soft deletes via deletedAt where data must survive for audit purposes
+//
+// Three constraints cannot be expressed in Prisma and live in hand-written SQL
+// inside the initial migration:
+//   1. Rating.stars    -> CHECK (stars BETWEEN 1 AND 5)
+//   2. ServiceRequest.publicCode -> a Postgres SEQUENCE, so codes are unique
+//      under concurrency (never derived from a row count)
+//   3. partial unique indexes that ignore soft-deleted rows
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Prisma 7 no longer accepts `url` here: the connection string for migrate
+// lives in prisma.config.ts, and the runtime client gets a driver adapter.
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Enums
+// ---------------------------------------------------------------------------
+
+enum Role {
+  CUSTOMER
+  PROVIDER
+  ADMIN
+}
+
+enum AdminLevel {
+  SUPER_ADMIN
+  DISPATCHER
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  BLOCKED
+}
+
+enum OtpPurpose {
+  LOGIN
+  APPLICATION
+  REQUEST
+}
+
+enum FileKind {
+  ID_FRONT
+  ID_BACK
+  SELFIE
+  REQUEST_PHOTO
+  EQUIPMENT_PHOTO
+}
+
+enum ApplicationStatus {
+  NEW
+  CONTACTED
+  INTERVIEWED
+  TRIAL
+  APPROVED
+  REJECTED
+}
+
+enum AvailabilityType {
+  H24
+  DAYTIME
+  CUSTOM
+}
+
+enum ProviderStatus {
+  ACTIVE
+  INACTIVE
+  SUSPENDED
+}
+
+/// The full request lifecycle. Transitions are enforced by a server-side
+/// state machine (phase 5) and every change is written to RequestStatusHistory.
+enum RequestStatus {
+  PENDING
+  ASSIGNED
+  ACCEPTED
+  ON_THE_WAY
+  ARRIVED
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED_BY_CUSTOMER
+  CANCELLED_BY_ADMIN
+  DECLINED
+  NO_PROVIDER_AVAILABLE
+}
+
+enum PaymentMethod {
+  CASH
+}
+
+// ---------------------------------------------------------------------------
+// Identity
+// ---------------------------------------------------------------------------
+
+/// One account per phone number. A tow-truck driver who also needs help for
+/// his own car uses the same account - see docs/adr/001-identity-model.md.
+model User {
+  id               String      @id @default(uuid()) @db.Uuid
+  role             Role        @default(CUSTOMER)
+  /// Only set when role = ADMIN.
+  adminLevel       AdminLevel?
+  /// E.164, e.g. +963912345678. Null for admins, who log in by email.
+  phone            String?     @unique
+  /// Null for customers and providers, who log in by phone + OTP.
+  email            String?     @unique
+  /// argon2id. Admins only.
+  passwordHash     String?
+  name             String?
+  isPhoneVerified  Boolean     @default(false)
+  status           UserStatus  @default(ACTIVE)
+  failedLoginCount Int         @default(0)
+  lockedUntil      DateTime?
+  lastLoginAt      DateTime?
+  deletedAt        DateTime?
+  createdAt        DateTime    @default(now())
+  updatedAt        DateTime    @updatedAt
+
+  sessions             Session[]
+  customerProfile      CustomerProfile?
+  providerProfile      ProviderProfile?
+  uploadedFiles        UploadedFile[]
+  auditLogs            AuditLog[]             @relation("AuditActor")
+  requestsAsCustomer   ServiceRequest[]       @relation("RequestCustomer")
+  requestsAsProvider   ServiceRequest[]       @relation("RequestProvider")
+  statusChanges        RequestStatusHistory[] @relation("StatusChangedBy")
+  ratingsGiven         Rating[]               @relation("RatingCustomer")
+  ratingsReceived      Rating[]               @relation("RatingProvider")
+  reviewedApplications ProviderApplication[]  @relation("ApplicationReviewer")
+  settingsUpdated      Setting[]              @relation("SettingUpdater")
+
+  @@index([role, status])
+  @@index([status])
+  @@index([createdAt])
+  @@index([deletedAt])
+}
+
+/// Database-backed sessions. Only the hash of the token is stored, so a stolen
+/// database dump cannot be replayed as a login.
+model Session {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @db.Uuid
+  /// sha256 of the random 32-byte token that lives in the cookie.
+  tokenHash String    @unique
+  userAgent String?
+  /// Hashed, never the raw IP - see the logging rules in CLAUDE.md.
+  ipHash    String?
+  expiresAt DateTime
+  createdAt DateTime  @default(now())
+  revokedAt DateTime?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+/// One row per issued OTP. The code itself is never stored: only an
+/// HMAC-SHA256 of it, keyed by OTP_HMAC_SECRET.
+model OtpCode {
+  id         String     @id @default(uuid()) @db.Uuid
+  phone      String
+  codeHash   String
+  purpose    OtpPurpose
+  attempts   Int        @default(0)
+  expiresAt  DateTime
+  consumedAt DateTime?
+  createdAt  DateTime   @default(now())
+  ipHash     String?
+
+  @@index([phone, purpose, createdAt])
+  @@index([expiresAt])
+}
+
+/// Backing store for the Postgres rate-limit driver. Deliberately not Redis:
+/// one fewer service to run on the VPS, and our volumes are small.
+model RateLimitEntry {
+  key         String   @id
+  count       Int      @default(0)
+  windowStart DateTime
+  expiresAt   DateTime
+
+  @@index([expiresAt])
+}
+
+// ---------------------------------------------------------------------------
+// Profiles
+// ---------------------------------------------------------------------------
+
+model CustomerProfile {
+  id           String   @id @default(uuid()) @db.Uuid
+  userId       String   @unique @db.Uuid
+  city         String?
+  idVerified   Boolean  @default(false)
+  idDocumentId String?  @db.Uuid
+  /// Hash of the ID number, for duplicate/fraud detection without storing
+  /// the number itself.
+  idHash       String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  user       User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  idDocument UploadedFile? @relation("CustomerIdDocument", fields: [idDocumentId], references: [id], onDelete: SetNull)
+
+  @@index([city])
+  @@index([idHash])
+}
+
+/// Submitted by anyone who wants to join as a provider. Vetted by an admin
+/// before a ProviderProfile is created (phase 4).
+model ProviderApplication {
+  id                    String            @id @default(uuid()) @db.Uuid
+  fullName              String
+  phone                 String
+  city                  String
+  coverageAreas         String[]
+  /// ServiceType slugs, plus provider-only roles such as passenger transport
+  /// that are not offered to customers as a service.
+  serviceTypes          String[]
+  yearsOfExperience     Int?
+  hasVehicleOrEquipment Boolean           @default(false)
+  equipmentDescription  String?
+  availability          AvailabilityType  @default(CUSTOM)
+  availabilityNotes     String?
+  referencesText        String?
+  idDocumentFrontId     String?           @db.Uuid
+  idDocumentBackId      String?           @db.Uuid
+  selfieId              String?           @db.Uuid
+  equipmentPhotoIds     String[]
+  idHash                String?
+  consentAccepted       Boolean           @default(false)
+  consentAcceptedAt     DateTime?
+  status                ApplicationStatus @default(NEW)
+  adminNotes            String?
+  reviewedByAdminId     String?           @db.Uuid
+  /// Short code the applicant can quote when following up, e.g. AP-000123.
+  publicReference       String            @unique
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  reviewedByAdmin User?           @relation("ApplicationReviewer", fields: [reviewedByAdminId], references: [id], onDelete: SetNull)
+  idDocumentFront UploadedFile?   @relation("ApplicationIdFront", fields: [idDocumentFrontId], references: [id], onDelete: SetNull)
+  idDocumentBack  UploadedFile?   @relation("ApplicationIdBack", fields: [idDocumentBackId], references: [id], onDelete: SetNull)
+  selfie          UploadedFile?   @relation("ApplicationSelfie", fields: [selfieId], references: [id], onDelete: SetNull)
+  providerProfile ProviderProfile?
+
+  @@index([status, createdAt])
+  @@index([phone])
+  @@index([city])
+  @@index([idHash])
+  @@index([createdAt])
+}
+
+/// Created only when an application is APPROVED.
+model ProviderProfile {
+  id                String         @id @default(uuid()) @db.Uuid
+  userId            String         @unique @db.Uuid
+  applicationId     String?        @unique @db.Uuid
+  /// ServiceType ids this provider is approved for.
+  serviceTypeIds    String[]
+  coverageAreas     String[]
+  ratingAverage     Float          @default(0)
+  ratingCount       Int            @default(0)
+  completedJobs     Int            @default(0)
+  /// Manual toggle for the MVP. There is no live GPS tracking yet, so
+  /// currentLat/currentLng is the provider's base location.
+  isAvailable       Boolean        @default(false)
+  currentLat        Float?
+  currentLng        Float?
+  locationUpdatedAt DateTime?
+  commissionPercent Decimal        @default(0) @db.Decimal(5, 2)
+  status            ProviderStatus @default(ACTIVE)
+  createdAt         DateTime       @default(now())
+  updatedAt         DateTime       @updatedAt
+
+  user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  application ProviderApplication? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
+
+  @@index([status, isAvailable])
+  @@index([isAvailable])
+  @@index([createdAt])
+}
+
+// ---------------------------------------------------------------------------
+// Catalogue
+// ---------------------------------------------------------------------------
+
+model ServiceType {
+  id                String   @id @default(uuid()) @db.Uuid
+  slug              String   @unique
+  nameAr            String
+  nameEn            String
+  descriptionAr     String?
+  descriptionEn     String?
+  /// Indicative only. Payment is cash, directly to the provider, and the
+  /// final amount is agreed on site.
+  estimatedPriceMin Decimal? @db.Decimal(12, 2)
+  estimatedPriceMax Decimal? @db.Decimal(12, 2)
+  isActive          Boolean  @default(true)
+  sortOrder         Int      @default(0)
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  requests ServiceRequest[]
+
+  @@index([isActive, sortOrder])
+}
+
+// ---------------------------------------------------------------------------
+// Requests
+// ---------------------------------------------------------------------------
+
+model ServiceRequest {
+  id                 String        @id @default(uuid()) @db.Uuid
+  /// Human-friendly code (RS-000123) filled in by a Postgres sequence default
+  /// that the initial migration installs. Never computed from a row count.
+  publicCode         String        @unique @default(dbgenerated("('RS-' || lpad(nextval('service_request_public_code_seq')::text, 6, '0'))"))
+  customerId         String        @db.Uuid
+  serviceTypeId      String        @db.Uuid
+  status             RequestStatus @default(PENDING)
+  lat                Float
+  lng                Float
+  addressText        String?
+  /// Syrian addressing relies on landmarks more than street names.
+  landmarkText       String?
+  carMake            String?
+  carModel           String?
+  carYear            Int?
+  plateNumber        String?
+  problemDescription String?
+  photoIds           String[]
+  assignedProviderId String?       @db.Uuid
+  estimatedPrice     Decimal?      @db.Decimal(12, 2)
+  finalPrice         Decimal?      @db.Decimal(12, 2)
+  paymentMethod      PaymentMethod @default(CASH)
+  cancelledReason    String?
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  assignedAt         DateTime?
+  acceptedAt         DateTime?
+  completedAt        DateTime?
+
+  customer         User                   @relation("RequestCustomer", fields: [customerId], references: [id], onDelete: Restrict)
+  assignedProvider User?                  @relation("RequestProvider", fields: [assignedProviderId], references: [id], onDelete: SetNull)
+  serviceType      ServiceType            @relation(fields: [serviceTypeId], references: [id], onDelete: Restrict)
+  statusHistory    RequestStatusHistory[]
+  rating           Rating?
+
+  @@index([status, createdAt])
+  @@index([customerId, createdAt])
+  @@index([assignedProviderId, status])
+  @@index([serviceTypeId])
+  @@index([createdAt])
+}
+
+/// Append-only log of every status transition. This is the evidence trail for
+/// disputes, so rows are never updated or deleted.
+model RequestStatusHistory {
+  id              String         @id @default(uuid()) @db.Uuid
+  requestId       String         @db.Uuid
+  /// Null for the very first entry, when the request is created.
+  fromStatus      RequestStatus?
+  toStatus        RequestStatus
+  changedByUserId String?        @db.Uuid
+  note            String?
+  createdAt       DateTime       @default(now())
+
+  request   ServiceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  changedBy User?          @relation("StatusChangedBy", fields: [changedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([requestId, createdAt])
+  @@index([changedByUserId])
+}
+
+model Rating {
+  id         String   @id @default(uuid()) @db.Uuid
+  requestId  String   @unique @db.Uuid
+  customerId String   @db.Uuid
+  providerId String   @db.Uuid
+  /// 1..5, enforced by a CHECK constraint added in the initial migration.
+  stars      Int
+  comment    String?
+  createdAt  DateTime @default(now())
+
+  request  ServiceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  customer User           @relation("RatingCustomer", fields: [customerId], references: [id], onDelete: Restrict)
+  provider User           @relation("RatingProvider", fields: [providerId], references: [id], onDelete: Restrict)
+
+  @@index([providerId, createdAt])
+  @@index([customerId])
+}
+
+// ---------------------------------------------------------------------------
+// Files, audit, settings
+// ---------------------------------------------------------------------------
+
+/// Metadata only. The bytes live in private storage (local disk in dev,
+/// S3-compatible in prod), encrypted, with EXIF stripped and a random
+/// storageKey. Nothing here is ever served from /public.
+model UploadedFile {
+  id         String    @id @default(uuid()) @db.Uuid
+  ownerId    String?   @db.Uuid
+  kind       FileKind
+  /// Random opaque key in the storage backend. Never the original filename.
+  storageKey String    @unique
+  mimeType   String
+  sizeBytes  Int
+  sha256     String
+  encrypted  Boolean   @default(true)
+  createdAt  DateTime  @default(now())
+  /// Set by the retention job; the bytes are destroyed at the same time.
+  deletedAt  DateTime?
+
+  owner User? @relation(fields: [ownerId], references: [id], onDelete: SetNull)
+
+  customerIdDocuments  CustomerProfile[]     @relation("CustomerIdDocument")
+  applicationIdFronts  ProviderApplication[] @relation("ApplicationIdFront")
+  applicationIdBacks   ProviderApplication[] @relation("ApplicationIdBack")
+  applicationSelfies   ProviderApplication[] @relation("ApplicationSelfie")
+
+  @@index([ownerId])
+  @@index([kind])
+  @@index([deletedAt])
+  @@index([sha256])
+  @@index([createdAt])
+}
+
+/// Append-only. Every view of an ID document, every role change, every
+/// dispatch decision lands here.
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  actorId    String?  @db.Uuid
+  action     String
+  entityType String
+  entityId   String?
+  metadata   Json?
+  ipHash     String?
+  createdAt  DateTime @default(now())
+
+  actor User? @relation("AuditActor", fields: [actorId], references: [id], onDelete: SetNull)
+
+  @@index([actorId, createdAt])
+  @@index([entityType, entityId])
+  @@index([action, createdAt])
+  @@index([createdAt])
+}
+
+/// Runtime configuration an admin can change without a deploy: business phone
+/// numbers, whether customer ID is required, default currency, and so on.
+model Setting {
+  key       String   @id
+  value     Json
+  updatedBy String?  @db.Uuid
+  updatedAt DateTime @updatedAt
+
+  updatedByUser User? @relation("SettingUpdater", fields: [updatedBy], references: [id], onDelete: SetNull)
+}
