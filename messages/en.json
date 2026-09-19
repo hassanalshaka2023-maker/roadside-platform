@@ -1,0 +1,191 @@
+{
+  "brand": {
+    "name": "Najdat Al-Tariq 24",
+    "fullName": "Najdat Al-Tariq 24 Hours",
+    "tagline": "Always with you on the road",
+    "sloganTrusted": "Trusted service, wherever you are",
+    "sloganSafer": "Together for safer roads in Syria"
+  },
+
+  "common": {
+    "appName": "Najdat Al-Tariq 24",
+    "loading": "Loading…",
+    "saving": "Saving…",
+    "retry": "Try again",
+    "back": "Back",
+    "next": "Next",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "close": "Close",
+    "send": "Send",
+    "search": "Search",
+    "empty": "Nothing here yet",
+    "somethingWentWrong": "Something went wrong",
+    "tryAgainLater": "Please try again in a moment",
+    "required": "This field is required",
+    "optional": "Optional",
+    "callUs": "Call us",
+    "whatsapp": "WhatsApp",
+    "language": "Language",
+    "arabic": "العربية",
+    "english": "English",
+    "hoursAllDay": "24 hours, every day",
+    "coverage": "All regions of Syria",
+    "comingSoonTitle": "Under construction",
+    "comingSoonText": "This screen will be built in a later phase"
+  },
+
+  "nav": {
+    "home": "Home",
+    "requestService": "Request a service",
+    "joinAsProvider": "Join as a provider",
+    "myAccount": "My account",
+    "login": "Log in",
+    "logout": "Log out",
+    "adminPanel": "Admin panel",
+    "providerPanel": "Provider panel",
+    "skipToContent": "Skip to content"
+  },
+
+  "home": {
+    "heroTitle": "Broken down? Help is on the way",
+    "heroSubtitle": "Towing, battery, tyres, mechanic — anytime, anywhere in Syria",
+    "heroCtaRequest": "Request a service",
+    "heroCtaProvider": "Join our team",
+    "servicesTitle": "Our services",
+    "servicesSubtitle": "Pick what you need and we will come to you",
+    "howItWorksTitle": "How it works",
+    "step1Title": "Send a request",
+    "step1Text": "Choose the service, drop a pin on the map and confirm your phone",
+    "step2Title": "We send the nearest technician",
+    "step2Text": "Our team contacts you and assigns the closest available provider",
+    "step3Title": "Help arrives",
+    "step3Text": "Follow your request step by step until the job is done",
+    "whyTitle": "Why Najdat Al-Tariq 24?",
+    "whyVetted": "Vetted technicians",
+    "whyVettedText": "Every provider is reviewed before joining",
+    "whyFast": "Fast response",
+    "whyFastText": "Around the clock, across Syria",
+    "whyCash": "Cash payment",
+    "whyCashText": "You pay the technician directly when the work is done",
+    "contactTitle": "Get in touch",
+    "contactText": "Call us or send a WhatsApp message"
+  },
+
+  "auth": {
+    "loginTitle": "Log in",
+    "loginSubtitle": "Enter your phone number and we will send you a code",
+    "phoneLabel": "Phone number",
+    "phonePlaceholder": "09XXXXXXXX",
+    "phoneHint": "A Syrian number starting with 09",
+    "sendCode": "Send code",
+    "otpTitle": "Enter the code",
+    "otpSubtitle": "We sent a 6-digit code to {phone}",
+    "otpLabel": "Verification code",
+    "verify": "Verify",
+    "resend": "Resend code",
+    "resendIn": "You can resend in {seconds} seconds",
+    "changePhone": "Change number",
+    "attemptsLeft": "{count} attempts left",
+    "loggedOut": "You have been logged out",
+
+    "adminLoginTitle": "Staff sign in",
+    "adminLoginSubtitle": "This page is for the team only",
+    "emailLabel": "Email",
+    "passwordLabel": "Password",
+    "signIn": "Sign in"
+  },
+
+  "phoneErrors": {
+    "EMPTY": "Please enter your phone number",
+    "INVALID_CHARS": "The number contains invalid characters. Digits only",
+    "NOT_SYRIAN": "Please enter a Syrian number",
+    "INVALID_LENGTH": "The number is incomplete. A Syrian mobile has 10 digits starting with 09",
+    "NOT_MOBILE": "That is not a mobile number. It should start with 09"
+  },
+
+  "otpErrors": {
+    "COOLDOWN": "We just sent you a code. Wait {seconds} seconds before asking for a new one",
+    "RATE_LIMITED_PHONE": "Too many codes requested for this number. Try again in an hour",
+    "RATE_LIMITED_IP": "Too many requests from this device. Try again in an hour",
+    "SEND_FAILED": "We could not send the code right now. Please try again shortly",
+    "NO_ACTIVE_CODE": "No active code. Please request a new one",
+    "EXPIRED": "The code has expired. Please request a new one",
+    "INVALID_CODE": "Incorrect code",
+    "TOO_MANY_ATTEMPTS": "Too many attempts. Please request a new code",
+    "RATE_LIMITED": "Too many attempts. Wait a moment and try again"
+  },
+
+  "adminLoginErrors": {
+    "INVALID_CREDENTIALS": "Incorrect email or password",
+    "LOCKED": "This account is temporarily locked after repeated failed attempts. Try again in {minutes} minutes",
+    "RATE_LIMITED": "Too many attempts. Wait a moment and try again"
+  },
+
+  "otpSms": {
+    "loginBody": "Your Najdat Al-Tariq 24 login code is: {code}. Valid for {minutes} minutes. Do not share it."
+  },
+
+  "account": {
+    "title": "My account",
+    "subtitle": "Your account details",
+    "phone": "Phone number",
+    "name": "Name",
+    "noName": "You have not added your name yet",
+    "role": "Account type",
+    "roleCustomer": "Customer",
+    "roleProvider": "Provider",
+    "roleAdmin": "Admin",
+    "myRequests": "My requests",
+    "noRequestsYet": "No requests yet",
+    "comingSoon": "Coming soon"
+  },
+
+  "admin": {
+    "title": "Admin panel",
+    "dashboard": "Dashboard",
+    "requests": "Requests",
+    "dispatch": "Dispatch",
+    "applications": "Applications",
+    "providers": "Providers",
+    "customers": "Customers",
+    "settings": "Settings",
+    "auditLog": "Audit log",
+    "welcome": "Welcome, {name}",
+    "levelSuperAdmin": "Super admin",
+    "levelDispatcher": "Dispatcher",
+    "placeholderTitle": "Under construction",
+    "placeholderText": "This screen will be built in a later phase",
+    "settingsTitle": "Settings",
+    "settingsRestricted": "This page is for super admins only",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu"
+  },
+
+  "provider": {
+    "title": "Provider panel",
+    "welcome": "Welcome, {name}",
+    "availability": "Status",
+    "available": "Available",
+    "unavailable": "Unavailable",
+    "myJobs": "My jobs",
+    "noJobs": "No jobs right now",
+    "placeholderText": "The jobs screen will be built in a later phase"
+  },
+
+  "errors": {
+    "notFoundTitle": "Page not found",
+    "notFoundText": "This link is not valid, or you do not have access to it",
+    "goHome": "Back to home",
+    "genericTitle": "Something unexpected happened",
+    "genericText": "Sorry about that. You can try again or go back to the home page",
+    "unauthorized": "You need to log in first",
+    "forbidden": "You do not have permission to do this",
+    "csrf": "The request was blocked for security reasons. Reload the page and try again"
+  },
+
+  "metadata": {
+    "title": "Najdat Al-Tariq 24 — Roadside assistance in Syria",
+    "description": "Towing, battery, tyre change, fuel delivery, lockout and on-site mechanic. 24 hours a day, across Syria."
+  }
+}
