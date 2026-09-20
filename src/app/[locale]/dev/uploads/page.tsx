@@ -11,9 +11,14 @@ import { UploadPlayground } from "./UploadPlayground";
  * Development-only harness for the upload pipeline.
  *
  * Returns 404 in production - checked here on the server, not hidden in the
- * UI. There is no route guard that would otherwise stop an admin-looking URL
- * from existing on a live deployment.
+ * UI. There is no route guard that would otherwise stop this URL from
+ * existing on a live deployment.
+ *
+ * force-dynamic matters: without it Next prerenders this page at build time,
+ * so the environment check would reflect whatever NODE_ENV the BUILD ran
+ * under rather than the one the server is actually running under.
  */
+export const dynamic = "force-dynamic";
 export default async function DevUploadsPage({
   params,
 }: {

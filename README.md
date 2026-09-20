@@ -141,6 +141,7 @@ Seeded demo numbers: `0930000001`, `0940000002` (customers),
 | `npm run db:seed` | run the seed |
 | `npm run db:studio` | Prisma Studio |
 | `npm run db:reset` | drop, re-migrate and re-seed — **destroys data** |
+| `npm run files:cleanup` | delete unattached uploads (add `--dry-run`, `--hours=N`) |
 | `npm run format` | Prettier |
 
 ---
@@ -211,6 +212,78 @@ never silently change the schema.
 
 ---
 
+## Private file storage
+
+Uploaded images — above all national ID scans and selfies — never touch the
+web root and are never served from a URL anyone can guess.
+
+**The pipeline.** `POST /api/files?kind=ID_FRONT` takes the raw image bytes.
+The size limit is enforced while the body streams in, not after buffering it.
+The real file type is then determined from magic bytes (the client's
+`Content-Type` and filename are ignored entirely), the image is fully decoded
+and **re-encoded with sharp** — which is what actually strips EXIF, GPS
+coordinates and any appended payload — resized to at most 2000px, encrypted
+with AES-256-GCM, and written under a random UUID.
+
+**Reading.** `GET /api/files/[id]` is the only way back in:
+
+| Kind | Who can read it |
+|---|---|
+| `ID_FRONT`, `ID_BACK`, `SELFIE` | holders of `viewIdDocuments` (SUPER_ADMIN) — **not even the owner** |
+| `REQUEST_PHOTO`, `EQUIPMENT_PHOTO` | the owner, SUPER_ADMIN and DISPATCHER |
+
+Every view of an identity document writes an `AuditLog` row **before** any
+bytes are sent, and if that write fails the request is refused — an
+unrecorded view is worse than a denied one. Anonymous callers get 401;
+everyone else gets the same 403 whether the file exists or not, so the
+endpoint cannot be used to discover which IDs are real.
+
+### File encryption keys — read this before deploying
+
+`FILE_ENCRYPTION_KEYS` is a versioned list, `1:<base64url 32-byte key>`.
+Each file records the version that encrypted it, so keys can be rotated by
+adding a new version and moving `FILE_ENCRYPTION_ACTIVE_VERSION` to it.
+
+> **Losing these keys means losing every uploaded file, permanently.**
+> There is no recovery path: the ciphertext is useless without them.
+
+Backing them up:
+
+1. Store them **separately from the database backup**. A single archive
+   containing both the encrypted files and the key is no better than storing
+   the IDs in plain sight.
+2. Keep an offline copy — a password manager entry, or printed and locked
+   away. Not in the repository, not in the same cloud account as the server.
+3. **Never delete an old key version** while any file still references it.
+   Find them with `SELECT DISTINCT "keyVersion" FROM "UploadedFile" WHERE
+   "deletedAt" IS NULL;`
+
+### Unattached files
+
+An upload arrives before the form that owns it is submitted, so it starts
+`UNATTACHED`. Someone who photographs their ID and then abandons the form
+leaves that scan attached to nothing, so it is deleted after
+`ORPHAN_FILE_TTL_HOURS` (24 by default):
+
+```bash
+npm run files:cleanup -- --dry-run     # show what would go
+npm run files:cleanup                  # delete them
+```
+
+Phase 6 will schedule this. **Until then, running it is the retention
+policy** — put it on a timer on any deployment that has real uploads.
+
+### Testing it by hand
+
+With the dev server running, open **`/ar/dev/uploads`** (a page that 404s in
+production). Log in first, then upload through each kind and follow the
+"open via the API" links to see the access rules refuse or allow you.
+
+To confirm the encryption is real, look at the stored file: it begins with
+the bytes `RSF1` and no image viewer will open it.
+
+---
+
 ## Notes and current limitations
 
 - **SMS delivery is unsolved.** International gateways do not deliver to
@@ -223,6 +296,17 @@ never silently change the schema.
 - **Map tiles are not chosen yet.** The CSP already allows the OpenStreetMap
   tile domains, but the public OSM tile server prohibits this kind of use —
   a keyed provider or a self-hosted Syria extract has to be decided in phase 3.
-- Sensitive-file storage, the request flow, provider applications and dispatch
-  are phases 2–5. The `/request` and `/apply` routes exist as honest
-  placeholders so the primary calls to action are not dead links.
+- **The S3 driver is untested.** No S3-compatible bucket was available while
+  it was written, so `src/lib/storage/s3.ts` has never run against a real
+  endpoint. Verify it before switching `STORAGE_DRIVER=s3` in production.
+- **iPhone HEIC cannot be decoded server-side.** This build of sharp has no
+  HEVC decoder. The upload widget converts HEIC to JPEG in the browser, where
+  Safari decodes it natively, so this only bites if JavaScript is bypassed —
+  and then the user gets a clear message telling them to switch the camera to
+  "Most Compatible".
+- **Malware scanning is a no-op.** `FileScanner` has the interface and
+  records `scannedAt`, but nothing is actually scanned until ClamAV is wired
+  in. Re-encoding every image already destroys appended payloads.
+- The request flow, provider applications and dispatch are phases 3–5. The
+  `/request` and `/apply` routes exist as honest placeholders so the primary
+  calls to action are not dead links.

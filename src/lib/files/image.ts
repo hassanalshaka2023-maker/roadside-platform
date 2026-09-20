@@ -35,8 +35,14 @@ export class ImageProcessingError extends Error {
   }
 }
 
-/** What we are willing to decode. */
-type DetectedType = "jpeg" | "png" | "webp" | "heic" | "unknown";
+/**
+ * What we are willing to decode.
+ *
+ * `avif` and `heic` are both ISO-BMFF containers and look almost identical,
+ * but they differ where it counts: AVIF is AV1-coded and this build of sharp
+ * decodes it, while an iPhone's HEIC is HEVC-coded and it cannot.
+ */
+type DetectedType = "jpeg" | "png" | "webp" | "avif" | "heic" | "unknown";
 
 /**
  * Identifies a file by its leading bytes.
@@ -72,9 +78,16 @@ export function detectImageType(buffer: Buffer): DetectedType {
     return "webp";
   }
 
-  // ISO-BMFF container: the brand sits in the ftyp box at offset 4.
+  // ISO-BMFF container: the MAJOR brand sits in the ftyp box at offset 8.
+  // Only the major brand is read - "mif1" also turns up in AVIF's list of
+  // compatible brands further along, and matching on that would misclassify
+  // every AVIF as an undecodable HEIC.
   if (buffer.toString("ascii", 4, 8) === "ftyp") {
     const brand = buffer.toString("ascii", 8, 12);
+
+    if (brand === "avif" || brand === "avis") return "avif";
+
+    // HEVC-coded. This is what an iPhone produces by default.
     if (["heic", "heix", "hevc", "hevx", "mif1", "msf1"].includes(brand)) {
       return "heic";
     }

@@ -70,7 +70,9 @@ export function FileUploadField({
   const fileInput = useRef<HTMLInputElement>(null);
   const cameraInput = useRef<HTMLInputElement>(null);
   const xhrRef = useRef<XMLHttpRequest | null>(null);
-  const lastFile = useRef<File | null>(null);
+  // State, not a ref: it is read during render to decide whether the retry
+  // button should appear, and refs must not be read while rendering.
+  const [lastFile, setLastFile] = useState<File | null>(null);
 
   const isIdDocument = ID_KINDS.includes(kind);
   const fieldId = id ?? `upload-${kind.toLowerCase()}`;
@@ -163,7 +165,7 @@ export function FileUploadField({
 
   const handleFile = useCallback(
     async (file: File) => {
-      lastFile.current = file;
+      setLastFile(file);
       setErrorKey(null);
       setProgress(0);
       setPhase("compressing");
@@ -211,7 +213,7 @@ export function FileUploadField({
     setPhase("idle");
     setErrorKey(null);
     setProgress(0);
-    lastFile.current = null;
+    setLastFile(null);
     onChange(null);
   }
 
@@ -261,8 +263,10 @@ export function FileUploadField({
         {phase === "done" ? (
           <div className="flex items-center gap-3">
             {previewUrl && !isIdDocument ? (
-              // eslint-disable-next-line @next/next/no-img-element -- a local
-              // object URL, never a remote or optimisable source.
+              /* A local object URL for the file the user just picked.
+                 next/image cannot optimise a blob, and there is nothing to
+                 optimise: these bytes never leave the browser. */
+              // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={previewUrl}
                 alt={t("preview")}
@@ -332,11 +336,11 @@ export function FileUploadField({
               {t("takePhoto")}
             </Button>
 
-            {phase === "error" && lastFile.current ? (
+            {phase === "error" && lastFile ? (
               <Button
                 type="button"
                 variant="ghost"
-                onClick={() => lastFile.current && void handleFile(lastFile.current)}
+                onClick={() => void handleFile(lastFile)}
                 disabled={disabled}
               >
                 <RotateCcw aria-hidden="true" className="h-5 w-5" />

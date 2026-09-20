@@ -123,8 +123,13 @@ export class LocalDiskDriver implements StorageDriver {
   }
 
   async exists(key: string): Promise<boolean> {
+    // Validated OUTSIDE the try. Inside it, the catch would swallow an
+    // invalid-key error and quietly answer "no such object" - turning an
+    // attempted traversal into a silent false instead of a loud rejection.
+    const target = this.pathFor(key);
+
     try {
-      await stat(this.pathFor(key));
+      await stat(target);
       return true;
     } catch {
       return false;
