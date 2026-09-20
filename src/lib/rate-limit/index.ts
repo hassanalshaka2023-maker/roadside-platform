@@ -53,6 +53,16 @@ export const RATE_LIMITS = {
   requestCreatePerUser: { limit: 5, windowSeconds: HOUR },
   /** Provider applications from one IP (phase 4). */
   applicationPerIp: { limit: 5, windowSeconds: 24 * HOUR },
+
+  /**
+   * File uploads. Deliberately tighter than the daily quota: the quota stops
+   * abuse over a day, this stops a burst from pinning the CPU, since every
+   * upload costs a full image decode and re-encode.
+   */
+  uploadPerUser: { limit: 10, windowSeconds: 10 * MINUTE },
+  uploadPerIp: { limit: 30, windowSeconds: 10 * MINUTE },
+  /** Reads are cheap, but still not unlimited - these are private documents. */
+  fileReadPerUser: { limit: 120, windowSeconds: 10 * MINUTE },
 } as const satisfies Record<string, RateLimitRule>;
 
 export type RateLimitName = keyof typeof RATE_LIMITS;

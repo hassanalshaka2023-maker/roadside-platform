@@ -22,7 +22,73 @@ const secret = (name: string) =>
       message: `${name} still holds the placeholder value from .env.example`,
     });
 
-const EnvSchema = z.object({
+/**
+ * Parses a versioned key ring: "1:<base64url>,2:<base64url>".
+ *
+ * Returns a Map<version, 32-byte key>. Old versions are kept deliberately:
+ * rotating the active key must not make previously encrypted files
+ * unreadable, so every key that ever encrypted a file stays here.
+ */
+const keyRing = (name: string) =>
+  z
+    .string()
+    .min(1, `${name} is required`)
+    .transform((raw, ctx) => {
+      const keys = new Map<number, Buffer>();
+
+      for (const entry of raw.split(",")) {
+        const trimmed = entry.trim();
+        if (!trimmed) continue;
+
+        const separator = trimmed.indexOf(":");
+        if (separator === -1) {
+          ctx.addIssue({
+            code: "custom",
+            message: `${name} entry "${trimmed.slice(0, 12)}…" is not in the form <version>:<base64url key>`,
+          });
+          return z.NEVER;
+        }
+
+        const version = Number(trimmed.slice(0, separator));
+        const material = trimmed.slice(separator + 1);
+
+        if (!Number.isInteger(version) || version < 1 || version > 255) {
+          ctx.addIssue({
+            code: "custom",
+            message: `${name} has an invalid version "${trimmed.slice(0, separator)}" (must be 1-255; it is stored in a single byte of the file header)`,
+          });
+          return z.NEVER;
+        }
+
+        const key = Buffer.from(material, "base64url");
+        if (key.length !== 32) {
+          ctx.addIssue({
+            code: "custom",
+            message: `${name} version ${version} decodes to ${key.length} bytes; AES-256 needs exactly 32 (generate one with: node -e "console.log(require('crypto').randomBytes(32).toString('base64url'))")`,
+          });
+          return z.NEVER;
+        }
+
+        if (keys.has(version)) {
+          ctx.addIssue({
+            code: "custom",
+            message: `${name} declares version ${version} twice`,
+          });
+          return z.NEVER;
+        }
+
+        keys.set(version, key);
+      }
+
+      if (keys.size === 0) {
+        ctx.addIssue({ code: "custom", message: `${name} contains no usable keys` });
+        return z.NEVER;
+      }
+
+      return keys;
+    });
+
+const EnvSchemaBase = z.object({
   // --- Core ---------------------------------------------------------------
   NODE_ENV: z
     .enum(["development", "test", "production"])
@@ -75,6 +141,93 @@ const EnvSchema = z.object({
   LOG_LEVEL: z
     .enum(["fatal", "error", "warn", "info", "debug", "trace"])
     .default("info"),
+
+  // --- File storage (phase 2) ---------------------------------------------
+  STORAGE_DRIVER: z.enum(["local", "s3"]).default("local"),
+
+  /**
+   * Absolute path for the local driver. MUST be outside the project directory
+   * and must never be under public/ - the driver refuses to start otherwise.
+   */
+  UPLOADS_DIR: z.string().optional(),
+
+  // S3-compatible storage. Only read when STORAGE_DRIVER=s3.
+  S3_ENDPOINT: z.string().optional(),
+  S3_REGION: z.string().optional(),
+  S3_BUCKET: z.string().optional(),
+  S3_ACCESS_KEY_ID: z.string().optional(),
+  S3_SECRET_ACCESS_KEY: z.string().optional(),
+  /** MinIO and most non-AWS providers need path-style addressing. */
+  S3_FORCE_PATH_STYLE: z
+    .enum(["true", "false"])
+    .default("true")
+    .transform((value) => value === "true"),
+
+  // --- File encryption ----------------------------------------------------
+  /**
+   * Versioned AES-256 keys: "1:<base64url>,2:<base64url>".
+   * Old versions must be KEPT so existing files stay readable after a
+   * rotation; only the active version is used for new files.
+   */
+  FILE_ENCRYPTION_KEYS: keyRing("FILE_ENCRYPTION_KEYS"),
+  FILE_ENCRYPTION_ACTIVE_VERSION: z.coerce.number().int().positive().default(1),
+
+  /** HMAC key for hashing national ID numbers (duplicate detection only). */
+  ID_HASH_SECRET: secret("ID_HASH_SECRET"),
+
+  // --- Upload limits ------------------------------------------------------
+  UPLOAD_MAX_BYTES: z.coerce.number().int().positive().default(8 * 1024 * 1024),
+  /** Longest side of the stored image, in pixels. */
+  UPLOAD_MAX_DIMENSION: z.coerce.number().int().positive().default(2000),
+  /** Decompression-bomb guard: refuse to decode beyond this many pixels. */
+  UPLOAD_MAX_PIXELS: z.coerce.number().int().positive().default(50_000_000),
+  UPLOAD_MAX_FILES_PER_DAY: z.coerce.number().int().positive().default(20),
+  UPLOAD_MAX_BYTES_PER_DAY: z.coerce
+    .number()
+    .int()
+    .positive()
+    .default(64 * 1024 * 1024),
+  /** How long an unattached file survives before the cleanup job removes it. */
+  ORPHAN_FILE_TTL_HOURS: z.coerce.number().int().positive().default(24),
+});
+
+/**
+ * Cross-field rules. Kept separate from the object schema so the
+ * SKIP_ENV_VALIDATION path below can still call `.partial()` on the base.
+ */
+const EnvSchema = EnvSchemaBase.superRefine((value, ctx) => {
+  if (value.STORAGE_DRIVER === "local" && !value.UPLOADS_DIR) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["UPLOADS_DIR"],
+      message: "UPLOADS_DIR is required when STORAGE_DRIVER=local",
+    });
+  }
+
+  if (value.STORAGE_DRIVER === "s3") {
+    for (const key of ["S3_BUCKET", "S3_REGION", "S3_ACCESS_KEY_ID", "S3_SECRET_ACCESS_KEY"] as const) {
+      if (!value[key]) {
+        ctx.addIssue({
+          code: "custom",
+          path: [key],
+          message: `${key} is required when STORAGE_DRIVER=s3`,
+        });
+      }
+    }
+  }
+
+  // A rotation that drops the active version would make every new upload fail
+  // at write time instead of here, at boot.
+  if (!value.FILE_ENCRYPTION_KEYS.has(value.FILE_ENCRYPTION_ACTIVE_VERSION)) {
+    ctx.addIssue({
+      code: "custom",
+      path: ["FILE_ENCRYPTION_ACTIVE_VERSION"],
+      message:
+        `FILE_ENCRYPTION_ACTIVE_VERSION=${value.FILE_ENCRYPTION_ACTIVE_VERSION} ` +
+        `has no matching key in FILE_ENCRYPTION_KEYS ` +
+        `(present: ${[...value.FILE_ENCRYPTION_KEYS.keys()].join(", ") || "none"})`,
+    });
+  }
 });
 
 export type Env = z.infer<typeof EnvSchema>;
@@ -99,7 +252,7 @@ function parseEnv(): Env {
   // available at image build time. It is deliberately NOT allowed to disable
   // validation at runtime - only during a build.
   if (process.env.SKIP_ENV_VALIDATION === "1") {
-    return EnvSchema.partial().parse(process.env) as Env;
+    return EnvSchemaBase.partial().parse(process.env) as Env;
   }
 
   const result = EnvSchema.safeParse(process.env);

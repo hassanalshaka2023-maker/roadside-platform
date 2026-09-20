@@ -63,6 +63,18 @@ enum FileKind {
   EQUIPMENT_PHOTO
 }
 
+/// Whether an uploaded file has been linked to a real record yet.
+///
+/// An upload arrives before the form that owns it is submitted, so it starts
+/// UNATTACHED. If the user abandons the form, nothing ever links it and the
+/// cleanup job removes it - otherwise abandoned ID scans would accumulate
+/// forever, which is exactly the data we least want to keep.
+enum FileLinkStatus {
+  UNATTACHED
+  ATTACHED
+  DELETED
+}
+
 enum ApplicationStatus {
   NEW
   CONTACTED
@@ -418,12 +430,28 @@ model UploadedFile {
   kind       FileKind
   /// Random opaque key in the storage backend. Never the original filename.
   storageKey String    @unique
+  /// The type we RE-ENCODED to, never what the client claimed.
   mimeType   String
+  /// Size of the stored plaintext (after re-encoding), not of the upload.
   sizeBytes  Int
+  /// sha256 of the stored plaintext, so a decrypted file can be verified.
   sha256     String
   encrypted  Boolean   @default(true)
+  /// Which FILE_ENCRYPTION_KEYS version encrypted this file. Duplicated in the
+  /// file header, but kept here too so a key rotation can find the affected
+  /// rows without reading every blob out of storage.
+  keyVersion Int       @default(1)
+  status     FileLinkStatus @default(UNATTACHED)
+  /// When this file was linked to a real record. Null + older than
+  /// ORPHAN_FILE_TTL_HOURS means the cleanup job may delete it.
+  attachedAt DateTime?
+  /// When the FileScanner last cleared this file. Null until scanned; the
+  /// no-op scanner sets it immediately, ClamAV will set it for real later.
+  scannedAt  DateTime?
   createdAt  DateTime  @default(now())
-  /// Set by the retention job; the bytes are destroyed at the same time.
+  /// Set by deleteFile() and by the retention job; the stored bytes are
+  /// destroyed at the same time, so this row is metadata about something
+  /// that no longer exists.
   deletedAt  DateTime?
 
   owner User? @relation(fields: [ownerId], references: [id], onDelete: SetNull)
@@ -438,6 +466,10 @@ model UploadedFile {
   @@index([deletedAt])
   @@index([sha256])
   @@index([createdAt])
+  /// Drives the orphan cleanup query: unattached files, oldest first.
+  @@index([status, createdAt])
+  /// Lets a key rotation find every file still on an old key.
+  @@index([keyVersion])
 }
 
 /// Append-only. Every view of an ID document, every role change, every

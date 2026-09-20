@@ -6,7 +6,6 @@
     "sloganTrusted": "Trusted service, wherever you are",
     "sloganSafer": "Together for safer roads in Syria"
   },
-
   "common": {
     "appName": "Najdat Al-Tariq 24",
     "loading": "Loading…",
@@ -34,7 +33,6 @@
     "comingSoonTitle": "Under construction",
     "comingSoonText": "This screen will be built in a later phase"
   },
-
   "nav": {
     "home": "Home",
     "requestService": "Request a service",
@@ -46,7 +44,6 @@
     "providerPanel": "Provider panel",
     "skipToContent": "Skip to content"
   },
-
   "home": {
     "heroTitle": "Broken down? Help is on the way",
     "heroSubtitle": "Towing, battery, tyres, mechanic — anytime, anywhere in Syria",
@@ -71,7 +68,6 @@
     "contactTitle": "Get in touch",
     "contactText": "Call us or send a WhatsApp message"
   },
-
   "auth": {
     "loginTitle": "Log in",
     "loginSubtitle": "Enter your phone number and we will send you a code",
@@ -88,14 +84,12 @@
     "changePhone": "Change number",
     "attemptsLeft": "{count} attempts left",
     "loggedOut": "You have been logged out",
-
     "adminLoginTitle": "Staff sign in",
     "adminLoginSubtitle": "This page is for the team only",
     "emailLabel": "Email",
     "passwordLabel": "Password",
     "signIn": "Sign in"
   },
-
   "phoneErrors": {
     "EMPTY": "Please enter your phone number",
     "INVALID_CHARS": "The number contains invalid characters. Digits only",
@@ -103,7 +97,6 @@
     "INVALID_LENGTH": "The number is incomplete. A Syrian mobile has 10 digits starting with 09",
     "NOT_MOBILE": "That is not a mobile number. It should start with 09"
   },
-
   "otpErrors": {
     "COOLDOWN": "We just sent you a code. Wait {seconds} seconds before asking for a new one",
     "RATE_LIMITED_PHONE": "Too many codes requested for this number. Try again in an hour",
@@ -115,17 +108,14 @@
     "TOO_MANY_ATTEMPTS": "Too many attempts. Please request a new code",
     "RATE_LIMITED": "Too many attempts. Wait a moment and try again"
   },
-
   "adminLoginErrors": {
     "INVALID_CREDENTIALS": "Incorrect email or password",
     "LOCKED": "This account is temporarily locked after repeated failed attempts. Try again in {minutes} minutes",
     "RATE_LIMITED": "Too many attempts. Wait a moment and try again"
   },
-
   "otpSms": {
     "loginBody": "Your Najdat Al-Tariq 24 login code is: {code}. Valid for {minutes} minutes. Do not share it."
   },
-
   "account": {
     "title": "My account",
     "subtitle": "Your account details",
@@ -140,7 +130,6 @@
     "noRequestsYet": "No requests yet",
     "comingSoon": "Coming soon"
   },
-
   "admin": {
     "title": "Admin panel",
     "dashboard": "Dashboard",
@@ -161,7 +150,6 @@
     "openMenu": "Open menu",
     "closeMenu": "Close menu"
   },
-
   "provider": {
     "title": "Provider panel",
     "welcome": "Welcome, {name}",
@@ -172,7 +160,6 @@
     "noJobs": "No jobs right now",
     "placeholderText": "The jobs screen will be built in a later phase"
   },
-
   "errors": {
     "notFoundTitle": "Page not found",
     "notFoundText": "This link is not valid, or you do not have access to it",
@@ -183,7 +170,56 @@
     "forbidden": "You do not have permission to do this",
     "csrf": "The request was blocked for security reasons. Reload the page and try again"
   },
-
+  "files": {
+    "chooseFile": "Choose an image",
+    "takePhoto": "Take a photo",
+    "retake": "Retake",
+    "remove": "Remove",
+    "retry": "Try again",
+    "uploading": "Uploading…",
+    "compressing": "Preparing…",
+    "uploaded": "Uploaded",
+    "uploadedNoPreview": "Uploaded successfully. For security reasons it cannot be shown again.",
+    "preview": "Image preview",
+    "progress": "{percent}% complete",
+    "hint": "Accepted: JPG, PNG or WebP, up to 8 MB",
+    "errors": {
+      "EMPTY": "The file is empty. Choose another image",
+      "TOO_LARGE": "That image is too large. The maximum is 8 MB",
+      "UNSUPPORTED_TYPE": "That file is not an image. Use JPG, PNG or WebP",
+      "HEIC_UNSUPPORTED": "HEIC is not supported. On iPhone set Camera Formats to \"Most Compatible\", or send the photo from your photo library",
+      "TOO_MANY_PIXELS": "The image dimensions are too large. Use a smaller image",
+      "CORRUPT": "We could not read that image. It may be damaged. Try another one",
+      "INFECTED": "The file was rejected for security reasons",
+      "INVALID_KIND": "Invalid file kind",
+      "QUOTA_FILES": "You have reached today's file limit. Try again tomorrow",
+      "QUOTA_BYTES": "You have reached today's upload size limit. Try again tomorrow",
+      "RATE_LIMITED": "Too many attempts. Wait a moment and try again",
+      "AUDIT_UNAVAILABLE": "The access could not be recorded, so it was denied. Please try later",
+      "NETWORK": "Connection failed. Check your network and try again"
+    }
+  },
+  "idPrivacy": {
+    "title": "Why do we ask for your ID?",
+    "why": "We verify identity to protect both customers and providers, and to prevent fake requests.",
+    "whoTitle": "Who can see it?",
+    "who": "Only authorised admin staff. Dispatchers and providers cannot see it, and it is not shown back to you after upload.",
+    "storageTitle": "How is it stored?",
+    "storage": "Encrypted on our servers, never published at a public URL. Every time it is viewed, who viewed it and when is recorded.",
+    "retentionTitle": "How long is it kept?",
+    "retention": "It is deleted automatically once it is no longer needed, under our data retention policy.",
+    "consent": "I agree to upload my ID and to it being processed as described above",
+    "consentRequired": "You must agree before continuing"
+  },
+  "dev": {
+    "title": "File upload test",
+    "subtitle": "Development-only page. Not available in production.",
+    "loginFirst": "Log in first to test uploading",
+    "currentUser": "Current user",
+    "uploadedFiles": "Files uploaded in this session",
+    "openInApi": "Open via the API",
+    "kind": "Kind"
+  },
   "metadata": {
     "title": "Najdat Al-Tariq 24 — Roadside assistance in Syria",
     "description": "Towing, battery, tyre change, fuel delivery, lockout and on-site mechanic. 24 hours a day, across Syria."

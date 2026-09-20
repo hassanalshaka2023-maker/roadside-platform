@@ -31,7 +31,11 @@ export type AuditAction =
   | "rbac.denied"
   | "user.created"
   | "user.status.changed"
+  | "file.uploaded"
   | "file.viewed"
+  | "file.deleted"
+  | "file.access.denied"
+  | "file.cleanup.orphan"
   | "settings.updated";
 
 export interface AuditEntry {
@@ -58,5 +62,44 @@ export async function audit(entry: AuditEntry): Promise<void> {
   } catch (error) {
     // Never let an audit failure take down the request it is describing.
     log.error({ err: error, action: entry.action }, "failed to write audit log");
+  }
+}
+
+export class AuditWriteError extends Error {
+  constructor() {
+    super("Audit log write failed");
+    this.name = "AuditWriteError";
+  }
+}
+
+/**
+ * Audit that THROWS instead of swallowing.
+ *
+ * `audit()` above is deliberately forgiving: a logging hiccup should not fail
+ * a login. But for viewing an ID document the trade-off inverts. The audit
+ * trail is the only record of who looked at someone's national ID, so an
+ * unrecorded view is worse than a failed one - if this cannot be written, the
+ * caller must deny the request.
+ *
+ * Always call it BEFORE streaming any bytes.
+ */
+export async function auditStrict(entry: AuditEntry): Promise<void> {
+  try {
+    await prisma.auditLog.create({
+      data: {
+        actorId: entry.actorId ?? null,
+        action: entry.action,
+        entityType: entry.entityType,
+        entityId: entry.entityId ?? null,
+        metadata: (entry.metadata ?? {}) as object,
+        ipHash: hashIp(entry.ip),
+      },
+    });
+  } catch (error) {
+    log.error(
+      { err: error, action: entry.action },
+      "strict audit write failed - denying the request it was guarding",
+    );
+    throw new AuditWriteError();
   }
 }
