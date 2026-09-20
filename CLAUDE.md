@@ -95,44 +95,49 @@ No online payments, no automatic matching, no native mobile apps, no insurance f
 - سائق سطحة (tow truck driver)
 - سائق تكسي / نقل أشخاص (passenger transport driver; needs a decision, see note below)
 
-## Current status (Phase 1 complete)
+## Current status (Phases 1-2 complete)
 
-Running foundation: DB, auth, RBAC, Arabic RTL shell. No business features yet
-(no request form, no provider application, no file uploads).
+Foundation (DB, auth, RBAC, Arabic RTL shell) plus private encrypted file
+storage. No business features yet: no request form, no provider application,
+no dispatch.
 
 ### Commands
 ```bash
 npm run dev                              # http://localhost:3000 -> /ar
 npm run db:migrate && npm run db:seed    # seed is idempotent
-npm test                                 # 86 unit tests, no DB needed
+npm test                                 # 190 unit tests, no DB needed
+npm run files:cleanup -- --dry-run       # unattached uploads
 npm run typecheck && npm run lint && npm run build
 ```
 Admin: `/ar/admin/login` (credentials from `SEED_*` in `.env`). Customer OTP:
-`/ar/login` — the code prints to the dev server console.
+`/ar/login` — the code prints to the dev server console. Upload harness:
+`/ar/dev/uploads` (404s in production).
 
 ### Key decisions
 - **Next 16.3.5**: `middleware` is deprecated, so locale routing and the
   nonce-based CSP live in `src/proxy.ts`.
-- **Prisma pinned to 7.10.0**: npm's `latest` is an 8.0.0 release candidate.
-  Prisma 7 has no `url` in `schema.prisma` — the CLI reads `prisma.config.ts`
-  and the runtime connects through `@prisma/adapter-pg`.
-- **Tailwind 3.4.19, not 4.x**: v4 requires Chrome 111+/Safari 16.4+ and our
-  users are on old Android phones. Logical properties behave the same in v3.
-- **`@node-rs/argon2`, not `argon2`**: same argon2id, prebuilt binaries, so no
-  C toolchain in the image and no musl breakage.
-- **Local PostgreSQL 18, not Docker** (Docker is not installed here). On
-  Windows `psql` is in `C:\Program Files\PostgreSQL\18\bin\`, not on PATH.
-- **Rate limiter on Postgres, not Redis**: one fewer service on the VPS.
-- Layout: `src/app/[locale]` routes · `src/features/*` actions, schemas,
-  components · `src/lib/*` env, db, auth, rate-limit, sms, phone, logger ·
-  `src/components/{ui,layout}` · `src/i18n` · `prisma/` · `messages/` · `tests/`
+- **Pinned deps**: Prisma 7.10.0 (npm `latest` is an 8.0.0 RC; no `url` in
+  `schema.prisma` — CLI reads `prisma.config.ts`, runtime uses
+  `@prisma/adapter-pg`) · Tailwind 3.4.19 not 4.x (v4 needs Chrome 111+ and
+  our users are on old phones) · `@node-rs/argon2` for prebuilt binaries.
+- **Local PostgreSQL 18, not Docker** (`psql` is in
+  `C:\Program Files\PostgreSQL\18\bin\`); rate limiter on Postgres, not Redis.
 - Authorization asks for a **permission**, never a role. Guards run inside
   every page and action; `src/proxy.ts` is not a security boundary.
+- **Files**: raw-body upload (not multipart) so the size cap applies while
+  streaming; magic bytes then a full sharp re-encode, which is what strips
+  EXIF/GPS; AES-256-GCM with versioned keys in an `RSF1` envelope; stored
+  outside the project under UUID keys. ID documents are readable by
+  `viewIdDocuments` only — **not even by their owner** — every view audited
+  before any byte is sent.
 
 ### Known limitations
-- **Docker files are untested** — never built, no Docker on this machine.
-- No real SMS gateway: `console` driver in dev, `stub` throws in production.
-- Map tiles not chosen yet — blocks Phase 3.
+- **No real SMS gateway** — `console` in dev, `stub` throws in production.
+  **This blocks any real launch**: customers cannot receive an OTP.
+- **Untested**: Docker files (none installed here) and the S3 driver (no
+  bucket available). Local disk only so far.
+- Malware scanning is a no-op interface; orphan cleanup is manual until
+  Phase 6 schedules it. Map tiles not chosen yet — blocks Phase 3.
 
 <!-- BEGIN:nextjs-agent-rules -->
 
