@@ -36,6 +36,8 @@ export type AuditAction =
   | "file.deleted"
   | "file.access.denied"
   | "file.cleanup.orphan"
+  | "request.created"
+  | "request.status.changed"
   | "settings.updated";
 
 export interface AuditEntry {

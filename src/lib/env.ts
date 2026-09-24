@@ -189,6 +189,33 @@ const EnvSchemaBase = z.object({
     .default(64 * 1024 * 1024),
   /** How long an unattached file survives before the cleanup job removes it. */
   ORPHAN_FILE_TTL_HOURS: z.coerce.number().int().positive().default(24),
+
+  // --- Maps (phase 3) -----------------------------------------------------
+  /**
+   * Raster tile template for Leaflet.
+   *
+   * Read on the server and passed down as a prop, NOT exposed as
+   * NEXT_PUBLIC_*, so it stays inside this validated schema.
+   *
+   * The default is the public OpenStreetMap server, which is fine for
+   * development but whose usage policy forbids production traffic. Point this
+   * at a keyed provider or a self-hosted tile server before launch.
+   */
+  MAP_TILE_URL: z
+    .string()
+    .default("https://tile.openstreetmap.org/{z}/{x}/{y}.png")
+    .refine((value) => value.includes("{z}") && value.includes("{x}") && value.includes("{y}"), {
+      message: "MAP_TILE_URL must contain the {z}, {x} and {y} placeholders",
+    }),
+  /** Attribution text. Required by the OSM licence, and by most providers. */
+  MAP_TILE_ATTRIBUTION: z
+    .string()
+    .default('&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'),
+
+  /** Where the map opens before the customer's location is known. Damascus. */
+  MAP_DEFAULT_LAT: z.coerce.number().default(33.5138),
+  MAP_DEFAULT_LNG: z.coerce.number().default(36.2765),
+  MAP_DEFAULT_ZOOM: z.coerce.number().int().min(1).max(19).default(13),
 });
 
 /**

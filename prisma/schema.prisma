@@ -341,7 +341,14 @@ model ServiceRequest {
   id                 String        @id @default(uuid()) @db.Uuid
   /// Human-friendly code (RS-000123) filled in by a Postgres sequence default
   /// that the initial migration installs. Never computed from a row count.
+  ///
+  /// SEQUENTIAL, therefore NEVER usable in a URL: RS-000042 would let anyone
+  /// walk the whole table. It exists so a customer can quote it on the phone.
   publicCode         String        @unique @default(dbgenerated("('RS-' || lpad(nextval('service_request_public_code_seq')::text, 6, '0'))"))
+  /// Unguessable secret for the shareable tracking link (/track/<token>).
+  /// 32 random bytes, base64url. This is what makes tracking work without a
+  /// login while still being private.
+  trackingToken      String        @unique
   customerId         String        @db.Uuid
   serviceTypeId      String        @db.Uuid
   status             RequestStatus @default(PENDING)
