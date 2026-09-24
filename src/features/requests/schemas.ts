@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+import { GOVERNORATE_SLUGS } from "@/lib/geo";
+
 /**
  * Input schemas for the request wizard.
  *
@@ -48,7 +50,12 @@ export const locationStepSchema = coordinatesSchema.extend({
    * how a driver is actually guided in most Syrian neighbourhoods.
    */
   landmarkText: z.string().trim().max(300).optional().or(z.literal("")),
+  /** Suggested from the pin, correctable by the customer. */
+  governorate: z.enum(GOVERNORATE_SLUGS, "GOVERNORATE_REQUIRED"),
 });
+
+export const VEHICLE_CATEGORIES = ["SEDAN", "SUV", "PICKUP", "VAN", "MINIBUS", "LIGHT_TRUCK"] as const;
+export type VehicleCategoryName = (typeof VEHICLE_CATEGORIES)[number];
 
 // --- step 3: the car -------------------------------------------------------
 
@@ -66,6 +73,18 @@ export const carStepSchema = z.object({
     .optional(),
   plateNumber: z.string().trim().max(30).optional().or(z.literal("")),
   problemDescription: z.string().trim().max(1000).optional().or(z.literal("")),
+  /** "I don't know what's wrong" - a perfectly good answer at the roadside. */
+  problemUnknown: z.boolean().optional().default(false),
+  carCategory: z.enum(VEHICLE_CATEGORIES).optional(),
+});
+
+// --- towing only -----------------------------------------------------------
+
+export const destinationSchema = z.object({
+  destinationText: z.string().trim().min(3, "DESTINATION_REQUIRED").max(300),
+  destinationLat: z.number().min(32).max(37.5).optional(),
+  destinationLng: z.number().min(35.5).max(42.5).optional(),
+  vehicleCanRoll: z.boolean().optional(),
 });
 
 // --- final submit ----------------------------------------------------------
@@ -81,6 +100,12 @@ export const createRequestSchema = serviceTypeStepSchema
   .extend(locationStepSchema.shape)
   .extend(carStepSchema.shape)
   .extend({
+    /** Generated once per form in the browser; makes a retry idempotent. */
+    clientRequestId: z.uuid(),
+    destinationText: z.string().trim().max(300).optional().or(z.literal("")),
+    destinationLat: z.number().min(32).max(37.5).optional(),
+    destinationLng: z.number().min(35.5).max(42.5).optional(),
+    vehicleCanRoll: z.boolean().optional(),
     photoIds: fileIdList,
     /** Set when settings require an ID for this request. */
     idFrontFileId: z.uuid().optional(),

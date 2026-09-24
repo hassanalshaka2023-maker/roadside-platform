@@ -1,22 +1,24 @@
 // Najdat Al-Tariq 24 - database schema
 //
-// The whole domain is modelled up front (phases 1-6) so later phases only add
-// columns, never restructure tables. Anything not used in phase 1 is still
-// created now: empty tables cost nothing, migrations on live data do.
-//
 // Conventions:
 //   - uuid primary keys, so ids are safe to expose in URLs and logs
 //   - every table carries createdAt/updatedAt
 //   - indexes on foreign keys and on anything we filter or sort by
-//     (status, city, phone, createdAt)
 //   - soft deletes via deletedAt where data must survive for audit purposes
+//   - MONEY IS AN INTEGER NUMBER OF SYRIAN POUNDS (columns end in `Syp`).
+//     Never a float, never a Decimal that JavaScript turns into a float: a
+//     price is a whole number of pounds and all arithmetic stays exact.
 //
-// Three constraints cannot be expressed in Prisma and live in hand-written SQL
-// inside the initial migration:
-//   1. Rating.stars    -> CHECK (stars BETWEEN 1 AND 5)
-//   2. ServiceRequest.publicCode -> a Postgres SEQUENCE, so codes are unique
-//      under concurrency (never derived from a row count)
-//   3. partial unique indexes that ignore soft-deleted rows
+// Constraints Prisma cannot express live in hand-written SQL in the
+// migrations:
+//   1. Rating.stars -> CHECK (stars BETWEEN 1 AND 5)
+//   2. ServiceRequest.publicCode / ProviderApplication.publicReference ->
+//      Postgres SEQUENCEs, so codes are unique under concurrency
+//   3. money CHECKs: amounts >= 0 and total = sum of its parts
+//   4. partial unique indexes: one ACCEPTED offer per request, one PENDING
+//      offer per provider per request
+//   5. a trigger that refuses any change to the money of an ACCEPTED offer,
+//      so an agreed price cannot be edited silently - not even by a bug
 
 generator client {
   provider = "prisma-client-js"
@@ -61,27 +63,36 @@ enum FileKind {
   SELFIE
   REQUEST_PHOTO
   EQUIPMENT_PHOTO
+  /// Photos of a tow truck. Visible to admins, never to customers.
+  VEHICLE_PHOTO
+  /// Proof of ownership of, or authorisation to use, a tow truck. Treated
+  /// with the same sensitivity as an ID document.
+  VEHICLE_DOCUMENT
 }
 
 /// Whether an uploaded file has been linked to a real record yet.
 ///
 /// An upload arrives before the form that owns it is submitted, so it starts
 /// UNATTACHED. If the user abandons the form, nothing ever links it and the
-/// cleanup job removes it - otherwise abandoned ID scans would accumulate
-/// forever, which is exactly the data we least want to keep.
+/// cleanup job removes it.
 enum FileLinkStatus {
   UNATTACHED
   ATTACHED
   DELETED
 }
 
+/// Approval state of a provider account.
+///
+/// Filling in the form is NOT verification: only an admin decision moves an
+/// application to APPROVED, and only APPROVED creates a ProviderProfile that
+/// can receive requests.
 enum ApplicationStatus {
-  NEW
-  CONTACTED
-  INTERVIEWED
-  TRIAL
+  DRAFT
+  PENDING_REVIEW
+  NEEDS_INFO
   APPROVED
   REJECTED
+  SUSPENDED
 }
 
 enum AvailabilityType {
@@ -96,24 +107,85 @@ enum ProviderStatus {
   SUSPENDED
 }
 
-/// The full request lifecycle. Transitions are enforced by a server-side
-/// state machine (phase 5) and every change is written to RequestStatusHistory.
+enum ProviderKind {
+  INDEPENDENT
+  WORKSHOP
+}
+
+/// What kind of vehicle needs moving. Drives tow-truck capability matching.
+enum VehicleCategory {
+  SEDAN
+  SUV
+  PICKUP
+  VAN
+  MINIBUS
+  LIGHT_TRUCK
+}
+
+/// The request lifecycle. Transitions are enforced by the state machine in
+/// src/features/requests/state-machine.ts and every change is written to
+/// RequestStatusHistory in the same transaction.
 enum RequestStatus {
-  PENDING
-  ASSIGNED
-  ACCEPTED
+  /// Visible to eligible providers, collecting offers.
+  SEARCHING
+  /// The customer accepted an offer; the provider is booked.
+  CONFIRMED
   ON_THE_WAY
   ARRIVED
   IN_PROGRESS
+  /// The provider says the work is done and the cash is paid. Not final until
+  /// the customer confirms: the provider's word alone proves nothing.
+  AWAITING_CONFIRMATION
   COMPLETED
+  /// The two sides disagree about completion or payment. An admin decides.
+  DISPUTED
   CANCELLED_BY_CUSTOMER
+  CANCELLED_BY_PROVIDER
   CANCELLED_BY_ADMIN
-  DECLINED
+  /// The search window closed without a single offer.
   NO_PROVIDER_AVAILABLE
+  /// Offers came in, but the customer accepted none before the window closed.
+  EXPIRED
 }
 
 enum PaymentMethod {
   CASH
+}
+
+enum OfferStatus {
+  PENDING
+  ACCEPTED
+  /// Another offer on the same request was accepted.
+  NOT_SELECTED
+  WITHDRAWN
+  EXPIRED
+}
+
+enum ExtraChargeStatus {
+  PENDING
+  APPROVED
+  DECLINED
+  WITHDRAWN
+}
+
+enum CommissionBase {
+  /// Percentage of everything the customer paid.
+  TOTAL
+  /// Percentage of labour only (callout + labour, excluding parts).
+  LABOR
+}
+
+enum CommissionEntryStatus {
+  DUE
+  SETTLED
+  WAIVED
+}
+
+enum ComplaintStatus {
+  OPEN
+  IN_REVIEW
+  RESOLVED
+  REJECTED
 }
 
 // ---------------------------------------------------------------------------
@@ -146,6 +218,7 @@ model User {
   sessions             Session[]
   customerProfile      CustomerProfile?
   providerProfile      ProviderProfile?
+  providerApplication  ProviderApplication?   @relation("ApplicationApplicant")
   uploadedFiles        UploadedFile[]
   auditLogs            AuditLog[]             @relation("AuditActor")
   requestsAsCustomer   ServiceRequest[]       @relation("RequestCustomer")
@@ -154,7 +227,17 @@ model User {
   ratingsGiven         Rating[]               @relation("RatingCustomer")
   ratingsReceived      Rating[]               @relation("RatingProvider")
   reviewedApplications ProviderApplication[]  @relation("ApplicationReviewer")
+  applicationDecisions ApplicationDecision[]
   settingsUpdated      Setting[]              @relation("SettingUpdater")
+  offers               RequestOffer[]
+  extraCharges         ExtraCharge[]
+  invitesReceived      RequestInvite[]        @relation("InviteProvider")
+  invitesSent          RequestInvite[]        @relation("InviteAdmin")
+  commissionEntries    CommissionEntry[]
+  settlements          CommissionSettlement[] @relation("SettlementProvider")
+  settlementsRecorded  CommissionSettlement[] @relation("SettlementRecorder")
+  complaintsFiled      Complaint[]            @relation("ComplaintFiler")
+  complaintsResolved   Complaint[]            @relation("ComplaintResolver")
 
   @@index([role, status])
   @@index([status])
@@ -233,72 +316,125 @@ model CustomerProfile {
   @@index([idHash])
 }
 
-/// Submitted by anyone who wants to join as a provider. Vetted by an admin
-/// before a ProviderProfile is created (phase 4).
+/// A provider's application, and after approval the record of how they were
+/// vetted. One per account: a rejected or incomplete applicant edits and
+/// resubmits the same row, so the decision history stays in one place.
 model ProviderApplication {
   id                    String            @id @default(uuid()) @db.Uuid
+  /// The applicant's account (phone verified by OTP before they can apply).
+  userId                String            @unique @db.Uuid
   fullName              String
   phone                 String
-  city                  String
-  coverageAreas         String[]
-  /// ServiceType slugs, plus provider-only roles such as passenger transport
-  /// that are not offered to customers as a service.
+  providerKind          ProviderKind      @default(INDEPENDENT)
+  workshopName          String?
+  workshopAddress       String?
+  /// Role slugs from the flyer (auto-mechanic, tow-truck-driver, ...).
+  specialties           String[]
+  /// ServiceType slugs the applicant wants to offer.
   serviceTypes          String[]
   yearsOfExperience     Int?
   hasVehicleOrEquipment Boolean           @default(false)
   equipmentDescription  String?
+  governorate           String
+  coverageAreas         String[]
+  /// Base location, used for distance matching once approved.
+  baseLat               Float?
+  baseLng               Float?
   availability          AvailabilityType  @default(CUSTOM)
   availabilityNotes     String?
-  referencesText        String?
+  // --- tow trucks only ---------------------------------------------------
+  towVehicleType        String?
+  towVehiclePlate       String?
+  towCapacities         VehicleCategory[]
+  vehiclePhotoIds       String[]
+  vehicleDocumentId     String?           @db.Uuid
+  // --- identity (admin only) ---------------------------------------------
   idDocumentFrontId     String?           @db.Uuid
   idDocumentBackId      String?           @db.Uuid
+  /// The personal photo. Treated as an identity document: admin only.
   selfieId              String?           @db.Uuid
   equipmentPhotoIds     String[]
   idHash                String?
-  consentAccepted       Boolean           @default(false)
+  // --- consents ------------------------------------------------------------
+  consentTerms          Boolean           @default(false)
+  consentAccuracy       Boolean           @default(false)
+  /// "I will not add any charge the customer has not approved."
+  consentNoHiddenFees   Boolean           @default(false)
   consentAcceptedAt     DateTime?
-  status                ApplicationStatus @default(NEW)
+  // --- review --------------------------------------------------------------
+  status                ApplicationStatus @default(DRAFT)
+  /// Shown to the applicant: why it was rejected or what is missing.
+  decisionReason        String?
+  /// Internal only, never shown to the applicant.
   adminNotes            String?
   reviewedByAdminId     String?           @db.Uuid
+  submittedAt           DateTime?
+  reviewedAt            DateTime?
   /// Short code the applicant can quote when following up, e.g. AP-000123.
-  publicReference       String            @unique
+  publicReference       String            @unique @default(dbgenerated("('AP-' || lpad(nextval('provider_application_ref_seq')::text, 6, '0'))"))
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
 
-  reviewedByAdmin User?           @relation("ApplicationReviewer", fields: [reviewedByAdminId], references: [id], onDelete: SetNull)
-  idDocumentFront UploadedFile?   @relation("ApplicationIdFront", fields: [idDocumentFrontId], references: [id], onDelete: SetNull)
-  idDocumentBack  UploadedFile?   @relation("ApplicationIdBack", fields: [idDocumentBackId], references: [id], onDelete: SetNull)
-  selfie          UploadedFile?   @relation("ApplicationSelfie", fields: [selfieId], references: [id], onDelete: SetNull)
+  user            User                  @relation("ApplicationApplicant", fields: [userId], references: [id], onDelete: Cascade)
+  reviewedByAdmin User?                 @relation("ApplicationReviewer", fields: [reviewedByAdminId], references: [id], onDelete: SetNull)
+  idDocumentFront UploadedFile?         @relation("ApplicationIdFront", fields: [idDocumentFrontId], references: [id], onDelete: SetNull)
+  idDocumentBack  UploadedFile?         @relation("ApplicationIdBack", fields: [idDocumentBackId], references: [id], onDelete: SetNull)
+  selfie          UploadedFile?         @relation("ApplicationSelfie", fields: [selfieId], references: [id], onDelete: SetNull)
+  vehicleDocument UploadedFile?         @relation("ApplicationVehicleDocument", fields: [vehicleDocumentId], references: [id], onDelete: SetNull)
   providerProfile ProviderProfile?
+  decisions       ApplicationDecision[]
 
   @@index([status, createdAt])
   @@index([phone])
-  @@index([city])
+  @@index([governorate])
   @@index([idHash])
   @@index([createdAt])
 }
 
+/// Append-only history of every review decision, with its reason.
+model ApplicationDecision {
+  id            String            @id @default(uuid()) @db.Uuid
+  applicationId String            @db.Uuid
+  adminId       String?           @db.Uuid
+  fromStatus    ApplicationStatus
+  toStatus      ApplicationStatus
+  reason        String?
+  createdAt     DateTime          @default(now())
+
+  application ProviderApplication @relation(fields: [applicationId], references: [id], onDelete: Cascade)
+  admin       User?               @relation(fields: [adminId], references: [id], onDelete: SetNull)
+
+  @@index([applicationId, createdAt])
+}
+
 /// Created only when an application is APPROVED.
 model ProviderProfile {
-  id                String         @id @default(uuid()) @db.Uuid
-  userId            String         @unique @db.Uuid
-  applicationId     String?        @unique @db.Uuid
-  /// ServiceType ids this provider is approved for.
+  id                String            @id @default(uuid()) @db.Uuid
+  userId            String            @unique @db.Uuid
+  applicationId     String?           @unique @db.Uuid
+  providerKind      ProviderKind      @default(INDEPENDENT)
+  workshopName      String?
+  /// ServiceType ids this provider is approved for. Changed by admins only.
   serviceTypeIds    String[]
+  governorate       String?
   coverageAreas     String[]
-  ratingAverage     Float          @default(0)
-  ratingCount       Int            @default(0)
-  completedJobs     Int            @default(0)
-  /// Manual toggle for the MVP. There is no live GPS tracking yet, so
-  /// currentLat/currentLng is the provider's base location.
-  isAvailable       Boolean        @default(false)
+  /// The provider's own limit. Matching uses min(this, admin search radius).
+  serviceRadiusKm   Int               @default(25)
+  towCapacities     VehicleCategory[]
+  workingHours      String?
+  /// Denormalised from Rating on every new rating, in the same transaction.
+  ratingAverage     Float             @default(0)
+  ratingCount       Int               @default(0)
+  completedJobs     Int               @default(0)
+  /// Manual toggle. There is no live GPS tracking, so currentLat/currentLng
+  /// is the provider's base location.
+  isAvailable       Boolean           @default(false)
   currentLat        Float?
   currentLng        Float?
   locationUpdatedAt DateTime?
-  commissionPercent Decimal        @default(0) @db.Decimal(5, 2)
-  status            ProviderStatus @default(ACTIVE)
-  createdAt         DateTime       @default(now())
-  updatedAt         DateTime       @updatedAt
+  status            ProviderStatus    @default(ACTIVE)
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
 
   user        User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
   application ProviderApplication? @relation(fields: [applicationId], references: [id], onDelete: SetNull)
@@ -312,21 +448,25 @@ model ProviderProfile {
 // Catalogue
 // ---------------------------------------------------------------------------
 
+/// There are NO prices here on purpose. The platform does not invent market
+/// rates: every price comes from a provider's offer.
 model ServiceType {
-  id                String   @id @default(uuid()) @db.Uuid
-  slug              String   @unique
-  nameAr            String
-  nameEn            String
-  descriptionAr     String?
-  descriptionEn     String?
-  /// Indicative only. Payment is cash, directly to the provider, and the
-  /// final amount is agreed on site.
-  estimatedPriceMin Decimal? @db.Decimal(12, 2)
-  estimatedPriceMax Decimal? @db.Decimal(12, 2)
-  isActive          Boolean  @default(true)
-  sortOrder         Int      @default(0)
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id            String   @id @default(uuid()) @db.Uuid
+  slug          String   @unique
+  nameAr        String
+  nameEn        String
+  descriptionAr String?
+  descriptionEn String?
+  /// Pricing rule shown next to offers, e.g. "the callout fee is due even if
+  /// you decline the repair after inspection".
+  pricingNoteAr String?
+  pricingNoteEn String?
+  /// True for towing: the request needs a destination and a vehicle category.
+  requiresDestination Boolean @default(false)
+  isActive      Boolean  @default(true)
+  sortOrder     Int      @default(0)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
 
   requests ServiceRequest[]
 
@@ -338,22 +478,25 @@ model ServiceType {
 // ---------------------------------------------------------------------------
 
 model ServiceRequest {
-  id                 String        @id @default(uuid()) @db.Uuid
-  /// Human-friendly code (RS-000123) filled in by a Postgres sequence default
-  /// that the initial migration installs. Never computed from a row count.
+  id                 String           @id @default(uuid()) @db.Uuid
+  /// Human-friendly code (RS-000123) from a Postgres sequence.
   ///
   /// SEQUENTIAL, therefore NEVER usable in a URL: RS-000042 would let anyone
   /// walk the whole table. It exists so a customer can quote it on the phone.
-  publicCode         String        @unique @default(dbgenerated("('RS-' || lpad(nextval('service_request_public_code_seq')::text, 6, '0'))"))
+  publicCode         String           @unique @default(dbgenerated("('RS-' || lpad(nextval('service_request_public_code_seq')::text, 6, '0'))"))
   /// Unguessable secret for the shareable tracking link (/track/<token>).
-  /// 32 random bytes, base64url. This is what makes tracking work without a
-  /// login while still being private.
-  trackingToken      String        @unique
-  customerId         String        @db.Uuid
-  serviceTypeId      String        @db.Uuid
-  status             RequestStatus @default(PENDING)
+  trackingToken      String           @unique
+  /// Generated by the browser once per form. A retry after a dropped
+  /// connection sends the same id, and gets the same request back instead of
+  /// a duplicate.
+  clientRequestId    String?          @db.Uuid
+  customerId         String           @db.Uuid
+  serviceTypeId      String           @db.Uuid
+  status             RequestStatus    @default(SEARCHING)
   lat                Float
   lng                Float
+  /// Shown to candidate providers instead of the exact location.
+  governorate        String?
   addressText        String?
   /// Syrian addressing relies on landmarks more than street names.
   landmarkText       String?
@@ -361,30 +504,153 @@ model ServiceRequest {
   carModel           String?
   carYear            Int?
   plateNumber        String?
+  carCategory        VehicleCategory?
+  /// Towing: can the car roll, or are the wheels/steering locked?
+  vehicleCanRoll     Boolean?
   problemDescription String?
+  /// The customer chose "I don't know what's wrong".
+  problemUnknown     Boolean          @default(false)
   photoIds           String[]
-  assignedProviderId String?       @db.Uuid
-  estimatedPrice     Decimal?      @db.Decimal(12, 2)
-  finalPrice         Decimal?      @db.Decimal(12, 2)
-  paymentMethod      PaymentMethod @default(CASH)
+  // --- towing destination --------------------------------------------------
+  destinationText    String?
+  destinationLat     Float?
+  destinationLng     Float?
+  // --- search ------------------------------------------------------------
+  /// Start of the current search round. Offers older than this belong to an
+  /// earlier round.
+  searchStartedAt    DateTime?
+  searchExpiresAt    DateTime?
+  searchAttempts     Int              @default(1)
+  /// A towing request created from a failed repair search.
+  fallbackFromId     String?          @db.Uuid
+  // --- booking -----------------------------------------------------------
+  assignedProviderId String?          @db.Uuid
+  acceptedOfferId    String?          @unique @db.Uuid
+  /// The customer explicitly accepted the callout/inspection fee terms as part
+  /// of accepting the offer.
+  feeTermsAcceptedAt DateTime?
+  /// Expected arrival, updated by the provider.
+  etaAt              DateTime?
+  // --- completion and cash -------------------------------------------------
+  paymentMethod      PaymentMethod    @default(CASH)
+  /// Computed by the server: accepted offer + APPROVED extras. Never typed in.
+  finalAmountSyp     Int?
+  providerConfirmedAt DateTime?
+  customerConfirmedAt DateTime?
+  disputeReason      String?
+  disputeResolution  String?
+  // --- commission snapshot -------------------------------------------------
+  /// Copied from the active policy when the offer is accepted, so changing
+  /// the settings later never rewrites what old requests owe.
+  commissionEnabled  Boolean          @default(false)
+  commissionRateBps  Int              @default(0)
+  commissionBase     CommissionBase?
+  commissionSyp      Int              @default(0)
   cancelledReason    String?
-  createdAt          DateTime      @default(now())
-  updatedAt          DateTime      @updatedAt
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
   assignedAt         DateTime?
-  acceptedAt         DateTime?
   completedAt        DateTime?
 
   customer         User                   @relation("RequestCustomer", fields: [customerId], references: [id], onDelete: Restrict)
   assignedProvider User?                  @relation("RequestProvider", fields: [assignedProviderId], references: [id], onDelete: SetNull)
   serviceType      ServiceType            @relation(fields: [serviceTypeId], references: [id], onDelete: Restrict)
+  acceptedOffer    RequestOffer?          @relation("AcceptedOffer", fields: [acceptedOfferId], references: [id], onDelete: Restrict)
+  fallbackFrom     ServiceRequest?        @relation("Fallback", fields: [fallbackFromId], references: [id], onDelete: SetNull)
+  fallbacks        ServiceRequest[]       @relation("Fallback")
   statusHistory    RequestStatusHistory[]
+  offers           RequestOffer[]         @relation("RequestOffers")
+  extraCharges     ExtraCharge[]
+  invites          RequestInvite[]
+  complaints       Complaint[]
+  commissionEntry  CommissionEntry?
   rating           Rating?
 
+  @@unique([customerId, clientRequestId])
   @@index([status, createdAt])
+  @@index([status, searchExpiresAt])
   @@index([customerId, createdAt])
   @@index([assignedProviderId, status])
   @@index([serviceTypeId])
   @@index([createdAt])
+}
+
+/// A provider's priced offer for a request.
+///
+/// Once ACCEPTED its money columns are frozen by a database trigger: the
+/// agreed price is a record, not a draft. The only change the trigger allows
+/// is ACCEPTED -> WITHDRAWN, when the booked provider drops out and the
+/// request goes back to searching.
+model RequestOffer {
+  id            String      @id @default(uuid()) @db.Uuid
+  requestId     String      @db.Uuid
+  providerId    String      @db.Uuid
+  status        OfferStatus @default(PENDING)
+  /// Callout and inspection fee.
+  calloutFeeSyp Int
+  laborSyp      Int
+  partsSyp      Int
+  /// Always calloutFeeSyp + laborSyp + partsSyp (CHECK constraint).
+  totalSyp      Int
+  etaMinutes    Int
+  includesText  String?
+  excludesText  String?
+  /// When true, the callout fee is owed even if the customer declines the
+  /// repair after the inspection. The customer sees and accepts this.
+  calloutDueIfDeclined Boolean @default(true)
+  validUntil    DateTime
+  /// Sent in response to an admin's direct invitation.
+  viaInvite     Boolean     @default(false)
+  createdAt     DateTime    @default(now())
+  respondedAt   DateTime?
+
+  request         ServiceRequest  @relation("RequestOffers", fields: [requestId], references: [id], onDelete: Cascade)
+  provider        User            @relation(fields: [providerId], references: [id], onDelete: Restrict)
+  acceptedRequest ServiceRequest? @relation("AcceptedOffer")
+
+  @@index([requestId, status])
+  @@index([providerId, status])
+  @@index([status, validUntil])
+}
+
+/// An additional cost discovered on site (parts, a bigger repair).
+///
+/// Kept apart from the request status so the main lifecycle stays simple.
+/// Only APPROVED extras ever reach finalAmountSyp.
+model ExtraCharge {
+  id          String            @id @default(uuid()) @db.Uuid
+  requestId   String            @db.Uuid
+  providerId  String            @db.Uuid
+  description String
+  laborSyp    Int
+  partsSyp    Int
+  totalSyp    Int
+  status      ExtraChargeStatus @default(PENDING)
+  createdAt   DateTime          @default(now())
+  respondedAt DateTime?
+
+  request  ServiceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  provider User           @relation(fields: [providerId], references: [id], onDelete: Restrict)
+
+  @@index([requestId, status])
+}
+
+/// An admin pointing a request at a specific provider (the manual half of
+/// hybrid dispatch). The provider still has to send an offer, and the customer
+/// still has to accept it.
+model RequestInvite {
+  id          String   @id @default(uuid()) @db.Uuid
+  requestId   String   @db.Uuid
+  providerId  String   @db.Uuid
+  invitedById String?  @db.Uuid
+  createdAt   DateTime @default(now())
+
+  request   ServiceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  provider  User           @relation("InviteProvider", fields: [providerId], references: [id], onDelete: Cascade)
+  invitedBy User?          @relation("InviteAdmin", fields: [invitedById], references: [id], onDelete: SetNull)
+
+  @@unique([requestId, providerId])
+  @@index([providerId, createdAt])
 }
 
 /// Append-only log of every status transition. This is the evidence trail for
@@ -424,6 +690,69 @@ model Rating {
   @@index([customerId])
 }
 
+model Complaint {
+  id           String          @id @default(uuid()) @db.Uuid
+  requestId    String          @db.Uuid
+  filedById    String          @db.Uuid
+  category     String
+  description  String
+  status       ComplaintStatus @default(OPEN)
+  adminNote    String?
+  resolvedById String?         @db.Uuid
+  resolvedAt   DateTime?
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+
+  request    ServiceRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  filedBy    User           @relation("ComplaintFiler", fields: [filedById], references: [id], onDelete: Restrict)
+  resolvedBy User?          @relation("ComplaintResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+
+  @@index([status, createdAt])
+  @@index([requestId])
+}
+
+// ---------------------------------------------------------------------------
+// Commission (disabled and zero by default)
+// ---------------------------------------------------------------------------
+
+/// What a provider owes the platform for one completed request. Cash goes to
+/// the provider, so commission is a debt recorded here, not a deduction.
+/// Only created when the snapshotted amount is above zero.
+model CommissionEntry {
+  id            String                @id @default(uuid()) @db.Uuid
+  requestId     String                @unique @db.Uuid
+  providerId    String                @db.Uuid
+  baseAmountSyp Int
+  rateBps       Int
+  amountSyp     Int
+  status        CommissionEntryStatus @default(DUE)
+  settlementId  String?               @db.Uuid
+  createdAt     DateTime              @default(now())
+  updatedAt     DateTime              @updatedAt
+
+  request    ServiceRequest        @relation(fields: [requestId], references: [id], onDelete: Restrict)
+  provider   User                  @relation(fields: [providerId], references: [id], onDelete: Restrict)
+  settlement CommissionSettlement? @relation(fields: [settlementId], references: [id], onDelete: SetNull)
+
+  @@index([providerId, status])
+}
+
+/// A cash payment from a provider to the platform, settling commission.
+model CommissionSettlement {
+  id           String   @id @default(uuid()) @db.Uuid
+  providerId   String   @db.Uuid
+  amountSyp    Int
+  note         String?
+  recordedById String?  @db.Uuid
+  createdAt    DateTime @default(now())
+
+  provider   User              @relation("SettlementProvider", fields: [providerId], references: [id], onDelete: Restrict)
+  recordedBy User?             @relation("SettlementRecorder", fields: [recordedById], references: [id], onDelete: SetNull)
+  entries    CommissionEntry[]
+
+  @@index([providerId, createdAt])
+}
+
 // ---------------------------------------------------------------------------
 // Files, audit, settings
 // ---------------------------------------------------------------------------
@@ -444,21 +773,17 @@ model UploadedFile {
   /// sha256 of the stored plaintext, so a decrypted file can be verified.
   sha256     String
   encrypted  Boolean   @default(true)
-  /// Which FILE_ENCRYPTION_KEYS version encrypted this file. Duplicated in the
-  /// file header, but kept here too so a key rotation can find the affected
-  /// rows without reading every blob out of storage.
+  /// Which FILE_ENCRYPTION_KEYS version encrypted this file.
   keyVersion Int       @default(1)
   status     FileLinkStatus @default(UNATTACHED)
   /// When this file was linked to a real record. Null + older than
   /// ORPHAN_FILE_TTL_HOURS means the cleanup job may delete it.
   attachedAt DateTime?
-  /// When the FileScanner last cleared this file. Null until scanned; the
-  /// no-op scanner sets it immediately, ClamAV will set it for real later.
+  /// When the FileScanner last cleared this file.
   scannedAt  DateTime?
   createdAt  DateTime  @default(now())
   /// Set by deleteFile() and by the retention job; the stored bytes are
-  /// destroyed at the same time, so this row is metadata about something
-  /// that no longer exists.
+  /// destroyed at the same time.
   deletedAt  DateTime?
 
   owner User? @relation(fields: [ownerId], references: [id], onDelete: SetNull)
@@ -467,20 +792,19 @@ model UploadedFile {
   applicationIdFronts  ProviderApplication[] @relation("ApplicationIdFront")
   applicationIdBacks   ProviderApplication[] @relation("ApplicationIdBack")
   applicationSelfies   ProviderApplication[] @relation("ApplicationSelfie")
+  applicationVehicleDocs ProviderApplication[] @relation("ApplicationVehicleDocument")
 
   @@index([ownerId])
   @@index([kind])
   @@index([deletedAt])
   @@index([sha256])
   @@index([createdAt])
-  /// Drives the orphan cleanup query: unattached files, oldest first.
   @@index([status, createdAt])
-  /// Lets a key rotation find every file still on an old key.
   @@index([keyVersion])
 }
 
-/// Append-only. Every view of an ID document, every role change, every
-/// dispatch decision lands here.
+/// Append-only. Every view of an ID document, every approval, every price or
+/// commission-settings change lands here.
 model AuditLog {
   id         String   @id @default(uuid()) @db.Uuid
   actorId    String?  @db.Uuid
@@ -499,8 +823,8 @@ model AuditLog {
   @@index([createdAt])
 }
 
-/// Runtime configuration an admin can change without a deploy: business phone
-/// numbers, whether customer ID is required, default currency, and so on.
+/// Runtime configuration an admin can change without a deploy. Every key is
+/// validated by the zod schemas in src/features/settings/platform.ts.
 model Setting {
   key       String   @id
   value     Json

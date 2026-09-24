@@ -1,111 +1,146 @@
 /**
- * Service-request domain logic.
+ * Service-request domain logic: creating, reading, timing out, cancelling and
+ * restarting requests.
  *
- * The route handlers and server actions do authentication, CSRF and rate
- * limiting; everything here assumes it has already been told who the actor
- * is. Nothing in this file reads cookies or headers.
+ * Route handlers and server actions do authentication, CSRF and rate
+ * limiting; everything here assumes it has been told who the actor is, but
+ * still re-checks ownership itself - "the caller already checked" is how
+ * authorization bugs happen.
  *
  * The rule this module exists to guarantee: a request's status NEVER changes
  * without the state machine agreeing AND a history row being written in the
- * same transaction.
+ * same transaction (see ./transition.ts).
  */
 import "server-only";
 
-import type { Prisma, RequestStatus } from "@prisma/client";
+import { Prisma, type RequestStatus } from "@prisma/client";
 
 import { audit } from "@/lib/audit";
 import { randomToken } from "@/lib/crypto";
 import { prisma } from "@/lib/db";
-import { attachFiles } from "@/lib/files/service";
+import { attachFiles, ownsAttachableFiles } from "@/lib/files/service";
 import { loggerFor } from "@/lib/logger";
+import { readMatchingSettings } from "@/features/settings/platform";
+import { DomainError } from "./errors";
+import type { CreateRequestInput } from "./schemas";
 import {
-  assertTransition,
   customerCanCancel,
+  SEARCH_ENDED_STATUSES,
   type RequestStatusName,
   type TransitionActor,
 } from "./state-machine";
-import type { CreateRequestInput } from "./schemas";
+import { applyTransition, loadForTransition, type Tx } from "./transition";
 
 const log = loggerFor("requests/service");
-
-export class RequestNotFoundError extends Error {
-  constructor() {
-    super("Request not found");
-    this.name = "RequestNotFoundError";
-  }
-}
-
-export class IdDocumentRequiredError extends Error {
-  constructor() {
-    super("An ID document is required for this request");
-    this.name = "IdDocumentRequiredError";
-  }
-}
 
 // ---------------------------------------------------------------------------
 // Reading
 // ---------------------------------------------------------------------------
 
-/** Everything the tracking page and the customer's list need. */
-const requestSelect = {
+/** What the customer sees about their own request. */
+export const customerRequestSelect = {
   id: true,
   publicCode: true,
   trackingToken: true,
   status: true,
   lat: true,
   lng: true,
+  governorate: true,
   addressText: true,
   landmarkText: true,
   carMake: true,
   carModel: true,
   carYear: true,
   plateNumber: true,
+  carCategory: true,
+  vehicleCanRoll: true,
   problemDescription: true,
+  problemUnknown: true,
   photoIds: true,
-  estimatedPrice: true,
-  finalPrice: true,
+  destinationText: true,
+  searchStartedAt: true,
+  searchExpiresAt: true,
+  searchAttempts: true,
+  fallbackFromId: true,
+  etaAt: true,
+  finalAmountSyp: true,
+  providerConfirmedAt: true,
+  customerConfirmedAt: true,
+  disputeReason: true,
+  disputeResolution: true,
   cancelledReason: true,
+  feeTermsAcceptedAt: true,
   createdAt: true,
   assignedAt: true,
-  acceptedAt: true,
   completedAt: true,
   customerId: true,
   assignedProviderId: true,
   serviceType: {
-    select: { slug: true, nameAr: true, nameEn: true },
+    select: {
+      id: true,
+      slug: true,
+      nameAr: true,
+      nameEn: true,
+      pricingNoteAr: true,
+      pricingNoteEn: true,
+      requiresDestination: true,
+    },
+  },
+  acceptedOffer: {
+    select: {
+      id: true,
+      calloutFeeSyp: true,
+      laborSyp: true,
+      partsSyp: true,
+      totalSyp: true,
+      etaMinutes: true,
+      includesText: true,
+      excludesText: true,
+      calloutDueIfDeclined: true,
+      createdAt: true,
+      respondedAt: true,
+    },
   },
   assignedProvider: {
-    select: { name: true, phone: true },
+    select: {
+      name: true,
+      phone: true,
+      providerProfile: {
+        select: { ratingAverage: true, ratingCount: true, workshopName: true },
+      },
+    },
   },
+  rating: { select: { stars: true, comment: true, createdAt: true } },
 } satisfies Prisma.ServiceRequestSelect;
 
-export type RequestDetail = Prisma.ServiceRequestGetPayload<{
-  select: typeof requestSelect;
+export type CustomerRequest = Prisma.ServiceRequestGetPayload<{
+  select: typeof customerRequestSelect;
 }>;
 
 /**
- * Looks a request up by its secret tracking token.
- *
- * This is the ONLY lookup that works without a session, which is why the
- * token has to be unguessable - and why `publicCode` must never be accepted
- * here, since it is sequential.
+ * Looks a request up by its secret tracking token - the ONLY lookup that
+ * works without a session, which is why the token is unguessable and why
+ * `publicCode` must never be accepted here.
  */
-export async function getByTrackingToken(
-  token: string,
-): Promise<RequestDetail | null> {
+export async function getByTrackingToken(token: string): Promise<CustomerRequest | null> {
   return prisma.serviceRequest.findUnique({
     where: { trackingToken: token },
-    select: requestSelect,
+    select: customerRequestSelect,
   });
 }
 
-export async function listForCustomer(
-  customerId: string,
-  limit = 20,
-): Promise<RequestDetail[]> {
+export async function listForCustomer(customerId: string, limit = 30) {
   return prisma.serviceRequest.findMany({
     where: { customerId },
-    select: requestSelect,
+    select: {
+      id: true,
+      publicCode: true,
+      trackingToken: true,
+      status: true,
+      createdAt: true,
+      finalAmountSyp: true,
+      serviceType: { select: { nameAr: true, nameEn: true, slug: true } },
+    },
     orderBy: { createdAt: "desc" },
     take: limit,
   });
@@ -118,9 +153,7 @@ export interface StatusHistoryEntry {
   createdAt: Date;
 }
 
-export async function getStatusHistory(
-  requestId: string,
-): Promise<StatusHistoryEntry[]> {
+export async function getStatusHistory(requestId: string): Promise<StatusHistoryEntry[]> {
   return prisma.requestStatusHistory.findMany({
     where: { requestId },
     select: { fromStatus: true, toStatus: true, note: true, createdAt: true },
@@ -137,14 +170,10 @@ export type CustomerIdMode = "NEVER" | "FIRST_REQUEST_ONLY" | "ALWAYS";
 /**
  * Whether this customer must attach an ID document for this request.
  *
- * FIRST_REQUEST_ONLY means what it says: once they have one accepted request
- * on file we stop asking, because we already hold the document and asking
- * again would mean storing a second copy of the same sensitive scan.
+ * FIRST_REQUEST_ONLY stops asking once we hold one, because asking again
+ * would mean storing a second copy of the same sensitive scan.
  */
-export async function isIdRequiredFor(
-  customerId: string,
-  mode: CustomerIdMode,
-): Promise<boolean> {
+export async function isIdRequiredFor(customerId: string, mode: CustomerIdMode): Promise<boolean> {
   if (mode === "NEVER") return false;
   if (mode === "ALWAYS") return true;
 
@@ -155,10 +184,7 @@ export async function isIdRequiredFor(
 
   if (profile?.idVerified || profile?.idDocumentId) return false;
 
-  const previous = await prisma.serviceRequest.count({
-    where: { customerId },
-  });
-
+  const previous = await prisma.serviceRequest.count({ where: { customerId } });
   return previous === 0;
 }
 
@@ -171,6 +197,8 @@ export interface CreateRequestParams {
   input: CreateRequestInput;
   /** True when settings demand an ID and this customer has not given one. */
   idRequired: boolean;
+  /** Set when this is the towing fallback of a failed repair search. */
+  fallbackFromId?: string;
   ip?: string | null;
 }
 
@@ -178,82 +206,124 @@ export interface CreatedRequest {
   id: string;
   publicCode: string;
   trackingToken: string;
+  /** False when a retry returned a request created earlier. */
+  created: boolean;
+}
+
+function isUniqueViolation(error: unknown): boolean {
+  return error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002";
+}
+
+async function findByClientId(customerId: string, clientRequestId: string) {
+  return prisma.serviceRequest.findUnique({
+    where: { customerId_clientRequestId: { customerId, clientRequestId } },
+    select: { id: true, publicCode: true, trackingToken: true },
+  });
 }
 
 /**
  * Creates a request, its first history row and its file links atomically.
  *
- * All in one transaction on purpose: a request without its opening history
- * row would be a request whose origin cannot be proven, and photos attached
- * to a request that failed to save would be orphans holding storage.
+ * IDEMPOTENT: the browser sends the same clientRequestId on every retry, so a
+ * customer on a flaky connection who taps "send" three times gets one request.
  */
-export async function createRequest(
-  params: CreateRequestParams,
-): Promise<CreatedRequest> {
-  const { customerId, input, idRequired, ip } = params;
+export async function createRequest(params: CreateRequestParams): Promise<CreatedRequest> {
+  const { customerId, input, idRequired, fallbackFromId, ip } = params;
 
-  if (idRequired && !input.idFrontFileId) {
-    throw new IdDocumentRequiredError();
+  const existing = await findByClientId(customerId, input.clientRequestId);
+  if (existing) return { ...existing, created: false };
+
+  if (idRequired && !input.idFrontFileId) throw new DomainError("ID_REQUIRED");
+
+  const serviceType = await prisma.serviceType.findFirst({
+    where: { id: input.serviceTypeId, isActive: true },
+    select: { id: true, requiresDestination: true },
+  });
+  if (!serviceType) throw new DomainError("NOT_FOUND", "service type");
+
+  if (serviceType.requiresDestination && !input.destinationText) {
+    throw new DomainError("DESTINATION_REQUIRED");
   }
 
-  // Unguessable, and generated here rather than by the database so the same
-  // code path produces it in every environment.
+  const fileIds = [...(input.photoIds ?? [])];
+  const photosOk = await ownsAttachableFiles(fileIds, customerId, ["REQUEST_PHOTO"]);
+  const idOk = input.idFrontFileId
+    ? await ownsAttachableFiles([input.idFrontFileId], customerId, ["ID_FRONT"])
+    : true;
+  if (!photosOk || !idOk) throw new DomainError("NOT_FOUND", "attached file");
+
+  const settings = await readMatchingSettings();
+  const now = new Date();
   const trackingToken = randomToken(32);
 
-  const created = await prisma.$transaction(async (tx) => {
-    const request = await tx.serviceRequest.create({
-      data: {
-        customerId,
-        serviceTypeId: input.serviceTypeId,
-        trackingToken,
-        status: "PENDING",
-        lat: input.lat,
-        lng: input.lng,
-        addressText: input.addressText || null,
-        landmarkText: input.landmarkText || null,
-        carMake: input.carMake || null,
-        carModel: input.carModel || null,
-        carYear: input.carYear ?? null,
-        plateNumber: input.plateNumber || null,
-        problemDescription: input.problemDescription || null,
-        photoIds: input.photoIds ?? [],
-      },
-      select: { id: true, publicCode: true, trackingToken: true },
-    });
-
-    // The opening entry: fromStatus is null because nothing preceded it.
-    await tx.requestStatusHistory.create({
-      data: {
-        requestId: request.id,
-        fromStatus: null,
-        toStatus: "PENDING",
-        changedByUserId: customerId,
-        note: "created by customer",
-      },
-    });
-
-    // Mark the photos as belonging to something, so the orphan sweep leaves
-    // them alone.
-    const fileIds = [...(input.photoIds ?? [])];
-    if (input.idFrontFileId) fileIds.push(input.idFrontFileId);
-    if (fileIds.length > 0) await attachFiles(fileIds, tx);
-
-    // Record the ID document and the consent against the customer profile.
-    if (input.idFrontFileId) {
-      await tx.customerProfile.upsert({
-        where: { userId: customerId },
-        create: { userId: customerId, idDocumentId: input.idFrontFileId },
-        update: { idDocumentId: input.idFrontFileId },
+  let created: { id: string; publicCode: string; trackingToken: string };
+  try {
+    created = await prisma.$transaction(async (tx) => {
+      const request = await tx.serviceRequest.create({
+        data: {
+          customerId,
+          clientRequestId: input.clientRequestId,
+          serviceTypeId: serviceType.id,
+          trackingToken,
+          status: "SEARCHING",
+          lat: input.lat,
+          lng: input.lng,
+          governorate: input.governorate,
+          addressText: input.addressText || null,
+          landmarkText: input.landmarkText || null,
+          carMake: input.carMake || null,
+          carModel: input.carModel || null,
+          carYear: input.carYear ?? null,
+          plateNumber: input.plateNumber || null,
+          carCategory: input.carCategory ?? null,
+          problemDescription: input.problemDescription || null,
+          problemUnknown: input.problemUnknown ?? false,
+          photoIds: fileIds,
+          destinationText: serviceType.requiresDestination ? input.destinationText || null : null,
+          destinationLat: serviceType.requiresDestination ? (input.destinationLat ?? null) : null,
+          destinationLng: serviceType.requiresDestination ? (input.destinationLng ?? null) : null,
+          vehicleCanRoll: serviceType.requiresDestination ? (input.vehicleCanRoll ?? null) : null,
+          fallbackFromId: fallbackFromId ?? null,
+          searchStartedAt: now,
+          searchExpiresAt: new Date(now.getTime() + settings.searchTimeoutMinutes * 60_000),
+        },
+        select: { id: true, publicCode: true, trackingToken: true },
       });
+
+      await tx.requestStatusHistory.create({
+        data: {
+          requestId: request.id,
+          fromStatus: null,
+          toStatus: "SEARCHING",
+          changedByUserId: customerId,
+          note: fallbackFromId ? "towing fallback" : "created by customer",
+        },
+      });
+
+      const toAttach = [...fileIds];
+      if (input.idFrontFileId) toAttach.push(input.idFrontFileId);
+      await attachFiles(toAttach, tx);
+
+      if (input.idFrontFileId) {
+        await tx.customerProfile.upsert({
+          where: { userId: customerId },
+          create: { userId: customerId, idDocumentId: input.idFrontFileId },
+          update: { idDocumentId: input.idFrontFileId },
+        });
+      }
+
+      return request;
+    });
+  } catch (error) {
+    // Two retries raced past the lookup above: the loser gets the winner's row.
+    if (isUniqueViolation(error)) {
+      const winner = await findByClientId(customerId, input.clientRequestId);
+      if (winner) return { ...winner, created: false };
     }
+    throw error;
+  }
 
-    return request;
-  });
-
-  log.info(
-    { requestId: created.id, publicCode: created.publicCode },
-    "service request created",
-  );
+  log.info({ requestId: created.id, publicCode: created.publicCode }, "service request created");
 
   await audit({
     actorId: customerId,
@@ -262,158 +332,472 @@ export async function createRequest(
     entityId: created.id,
     metadata: {
       publicCode: created.publicCode,
-      serviceTypeId: input.serviceTypeId,
+      serviceTypeId: serviceType.id,
       withId: Boolean(input.idFrontFileId),
-      photoCount: input.photoIds?.length ?? 0,
+      photoCount: fileIds.length,
+      fallbackFromId: fallbackFromId ?? null,
     },
     ip,
   });
 
-  return created;
+  return { ...created, created: true };
 }
 
 // ---------------------------------------------------------------------------
-// Transitions
+// Search timeout
 // ---------------------------------------------------------------------------
-
-/** Timestamp columns that a given target status also stamps. */
-const STATUS_TIMESTAMPS: Partial<Record<RequestStatusName, keyof Prisma.ServiceRequestUpdateInput>> = {
-  ASSIGNED: "assignedAt",
-  ACCEPTED: "acceptedAt",
-  COMPLETED: "completedAt",
-};
-
-export interface TransitionParams {
-  requestId: string;
-  to: RequestStatusName;
-  actor: TransitionActor;
-  actorUserId: string | null;
-  note?: string;
-  /** Only meaningful when moving to a cancelled state. */
-  cancelledReason?: string;
-  ip?: string | null;
-}
 
 /**
- * The single way a request's status ever changes.
+ * Closes searches whose window has passed, and expires stale offers.
  *
- * Re-reads the current status INSIDE the transaction and guards the update
- * with it, so two people acting at the same moment cannot both win - the
- * second one's update matches zero rows and is rejected.
+ * Called lazily whenever a list or tracking page is read, and by
+ * `npm run jobs:sweep` for a cron. Both are safe to run concurrently: each
+ * close is a compare-and-swap, so a request is closed exactly once.
+ *
+ * A search stays open while an unexpired offer is waiting - the customer
+ * never loses an offer they are looking at because a timer ran out.
+ *
+ * Result: EXPIRED if any offer came in this round (the customer just did not
+ * pick one), NO_PROVIDER_AVAILABLE if none did. Only this sweep decides "no
+ * provider available", and only from real data: a network error never
+ * reaches here.
  */
-export async function transitionRequest(
-  params: TransitionParams,
-): Promise<RequestStatusName> {
-  const { requestId, to, actor, actorUserId, note, cancelledReason, ip } = params;
-
-  const result = await prisma.$transaction(async (tx) => {
-    const current = await tx.serviceRequest.findUnique({
-      where: { id: requestId },
-      select: { id: true, status: true },
-    });
-
-    if (!current) throw new RequestNotFoundError();
-
-    const from = current.status as RequestStatusName;
-
-    // Throws IllegalTransitionError, which the caller maps to a message.
-    assertTransition(from, to, actor);
-
-    const data: Prisma.ServiceRequestUpdateInput = { status: to };
-
-    const timestampField = STATUS_TIMESTAMPS[to];
-    if (timestampField) {
-      (data as Record<string, unknown>)[timestampField] = new Date();
-    }
-
-    if (cancelledReason) data.cancelledReason = cancelledReason;
-
-    // The `status: from` guard makes this a compare-and-swap: if anything
-    // moved the request since we read it, this updates nothing.
-    const updated = await tx.serviceRequest.updateMany({
-      where: { id: requestId, status: from },
-      data,
-    });
-
-    if (updated.count === 0) {
-      throw new Error("Request status changed concurrently; transition aborted");
-    }
-
-    await tx.requestStatusHistory.create({
-      data: {
-        requestId,
-        fromStatus: from,
-        toStatus: to,
-        changedByUserId: actorUserId,
-        note: note ?? null,
-      },
-    });
-
-    return { from, to };
+export async function sweepExpiredSearches(now: Date = new Date()): Promise<number> {
+  await prisma.requestOffer.updateMany({
+    where: { status: "PENDING", validUntil: { lt: now } },
+    data: { status: "EXPIRED", respondedAt: now },
   });
 
-  log.info({ requestId, from: result.from, to: result.to, actor }, "request transitioned");
+  const due = await prisma.serviceRequest.findMany({
+    where: {
+      status: "SEARCHING",
+      searchExpiresAt: { lt: now },
+      offers: { none: { status: "PENDING", validUntil: { gte: now } } },
+    },
+    select: { id: true, searchStartedAt: true },
+    take: 100,
+  });
+
+  let closed = 0;
+  for (const request of due) {
+    try {
+      await prisma.$transaction(async (tx) => {
+        const offersThisRound = await tx.requestOffer.count({
+          where: {
+            requestId: request.id,
+            createdAt: { gte: request.searchStartedAt ?? new Date(0) },
+          },
+        });
+        const to: RequestStatusName = offersThisRound > 0 ? "EXPIRED" : "NO_PROVIDER_AVAILABLE";
+        await applyTransition(tx, {
+          requestId: request.id,
+          from: "SEARCHING",
+          to,
+          actor: "SYSTEM",
+          actorUserId: null,
+          note: "search window closed",
+        });
+      });
+      closed += 1;
+    } catch (error) {
+      // Someone accepted or cancelled at the same moment: they won, fine.
+      if (error instanceof DomainError) continue;
+      log.error({ err: error, requestId: request.id }, "search sweep failed for request");
+    }
+  }
+
+  if (closed > 0) log.info({ closed }, "closed expired searches");
+  return closed;
+}
+
+/** Best-effort wrapper for page loads: a sweep failure must not break a page. */
+export async function sweepQuietly(): Promise<void> {
+  try {
+    await sweepExpiredSearches();
+  } catch (error) {
+    log.error({ err: error }, "lazy sweep failed");
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Shared: releasing a booking
+// ---------------------------------------------------------------------------
+
+/**
+ * Puts a booked request back into the pool: the provider dropped out, or an
+ * admin reassigns. The accepted offer is WITHDRAWN (its money stays frozen as
+ * a record), pending extras die with the booking, and a fresh search round
+ * starts.
+ */
+export async function releaseBooking(
+  tx: Tx,
+  params: {
+    requestId: string;
+    from: RequestStatusName;
+    actor: TransitionActor;
+    actorUserId: string | null;
+    note: string;
+  },
+): Promise<void> {
+  const current = await loadForTransition(tx, params.requestId);
+  const settings = await readMatchingSettings();
+  const now = new Date();
+
+  await applyTransition(tx, {
+    requestId: params.requestId,
+    from: params.from,
+    to: "SEARCHING",
+    actor: params.actor,
+    actorUserId: params.actorUserId,
+    note: params.note,
+    data: {
+      assignedProviderId: null,
+      acceptedOfferId: null,
+      assignedAt: null,
+      etaAt: null,
+      feeTermsAcceptedAt: null,
+      commissionEnabled: false,
+      commissionRateBps: 0,
+      commissionBase: null,
+      searchStartedAt: now,
+      searchExpiresAt: new Date(now.getTime() + settings.searchTimeoutMinutes * 60_000),
+      searchAttempts: { increment: 1 },
+    },
+  });
+
+  if (current.acceptedOfferId) {
+    await tx.requestOffer.update({
+      where: { id: current.acceptedOfferId },
+      data: { status: "WITHDRAWN", respondedAt: now },
+    });
+  }
+
+  await tx.extraCharge.updateMany({
+    where: { requestId: params.requestId, status: "PENDING" },
+    data: { status: "WITHDRAWN", respondedAt: now },
+  });
+}
+
+/** Closes any offers still open on a request that has stopped searching. */
+async function closeOpenOffers(tx: Tx, requestId: string): Promise<void> {
+  await tx.requestOffer.updateMany({
+    where: { requestId, status: "PENDING" },
+    data: { status: "NOT_SELECTED", respondedAt: new Date() },
+  });
+  await tx.extraCharge.updateMany({
+    where: { requestId, status: "PENDING" },
+    data: { status: "WITHDRAWN", respondedAt: new Date() },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Customer actions
+// ---------------------------------------------------------------------------
+
+async function loadOwned(tx: Tx, requestId: string, customerId: string) {
+  const request = await loadForTransition(tx, requestId);
+  // Same error for "missing" and "someone else's", so ids cannot be probed.
+  if (request.customerId !== customerId) throw new DomainError("NOT_FOUND");
+  return request;
+}
+
+export async function cancelByCustomer(params: {
+  requestId: string;
+  customerId: string;
+  reason?: string;
+  ip?: string | null;
+}): Promise<void> {
+  const { requestId, customerId, reason, ip } = params;
+
+  const from = await prisma.$transaction(async (tx) => {
+    const request = await loadOwned(tx, requestId, customerId);
+    if (!customerCanCancel(request.status)) {
+      throw new DomainError("ILLEGAL_TRANSITION", `cancel from ${request.status}`);
+    }
+    await applyTransition(tx, {
+      requestId,
+      from: request.status,
+      to: "CANCELLED_BY_CUSTOMER",
+      actor: "CUSTOMER",
+      actorUserId: customerId,
+      note: "cancelled by customer",
+      data: { cancelledReason: reason || null },
+    });
+    await closeOpenOffers(tx, requestId);
+    return request.status;
+  });
+
+  await audit({
+    actorId: customerId,
+    action: "request.status.changed",
+    entityType: "ServiceRequest",
+    entityId: requestId,
+    metadata: { from, to: "CANCELLED_BY_CUSTOMER", actor: "CUSTOMER" },
+    ip,
+  });
+}
+
+/** "Search again" after a search ended with nobody booked. */
+export async function restartSearch(params: {
+  requestId: string;
+  actor: "CUSTOMER" | "ADMIN";
+  actorUserId: string;
+  ip?: string | null;
+}): Promise<void> {
+  const { requestId, actor, actorUserId, ip } = params;
+  const settings = await readMatchingSettings();
+
+  const from = await prisma.$transaction(async (tx) => {
+    const request =
+      actor === "CUSTOMER"
+        ? await loadOwned(tx, requestId, actorUserId)
+        : await loadForTransition(tx, requestId);
+
+    if (!SEARCH_ENDED_STATUSES.includes(request.status)) {
+      throw new DomainError("ILLEGAL_TRANSITION", `restart from ${request.status}`);
+    }
+    const now = new Date();
+    await applyTransition(tx, {
+      requestId,
+      from: request.status,
+      to: "SEARCHING",
+      actor,
+      actorUserId,
+      note: "search restarted",
+      data: {
+        searchStartedAt: now,
+        searchExpiresAt: new Date(now.getTime() + settings.searchTimeoutMinutes * 60_000),
+        searchAttempts: { increment: 1 },
+      },
+    });
+    return request.status;
+  });
 
   await audit({
     actorId: actorUserId,
     action: "request.status.changed",
     entityType: "ServiceRequest",
     entityId: requestId,
-    metadata: { from: result.from, to: result.to, actor },
+    metadata: { from, to: "SEARCHING", actor, reason: "restart" },
     ip,
   });
-
-  return result.to;
-}
-
-// ---------------------------------------------------------------------------
-// Customer cancellation
-// ---------------------------------------------------------------------------
-
-export interface CancelParams {
-  requestId: string;
-  customerId: string;
-  reason?: string;
-  ip?: string | null;
 }
 
 /**
- * Cancels a request on the customer's behalf.
- *
- * Ownership is checked here as well as in the action: this function must be
- * safe to call from anywhere, and "the caller already checked" is how
- * authorization bugs happen.
+ * The towing fallback: nobody could repair the car where it is, so offer to
+ * move it. Only ever created by the customer's explicit confirmation, keeps
+ * the location and car details, and needs a destination. Never offered when
+ * the original request was already a tow.
  */
-export async function cancelByCustomer(params: CancelParams): Promise<void> {
-  const { requestId, customerId, reason, ip } = params;
+export async function createTowingFallback(params: {
+  requestId: string;
+  customerId: string;
+  clientRequestId: string;
+  destinationText: string;
+  destinationLat?: number;
+  destinationLng?: number;
+  vehicleCanRoll?: boolean;
+  ip?: string | null;
+}): Promise<CreatedRequest> {
+  const { requestId, customerId, ip } = params;
+
+  const original = await prisma.serviceRequest.findUnique({
+    where: { id: requestId },
+    select: {
+      id: true,
+      customerId: true,
+      status: true,
+      lat: true,
+      lng: true,
+      governorate: true,
+      addressText: true,
+      landmarkText: true,
+      carMake: true,
+      carModel: true,
+      carYear: true,
+      plateNumber: true,
+      carCategory: true,
+      problemDescription: true,
+      problemUnknown: true,
+      serviceType: { select: { requiresDestination: true } },
+    },
+  });
+
+  if (!original || original.customerId !== customerId) throw new DomainError("NOT_FOUND");
+  if (original.serviceType.requiresDestination) throw new DomainError("FALLBACK_NOT_ALLOWED");
+  if (!SEARCH_ENDED_STATUSES.includes(original.status as RequestStatusName)) {
+    throw new DomainError("FALLBACK_NOT_ALLOWED");
+  }
+
+  const towing = await prisma.serviceType.findFirst({
+    where: { requiresDestination: true, isActive: true },
+    orderBy: { sortOrder: "asc" },
+    select: { id: true },
+  });
+  if (!towing) throw new DomainError("NOT_FOUND", "towing service");
+
+  const created = await createRequest({
+    customerId,
+    idRequired: false,
+    fallbackFromId: original.id,
+    ip,
+    input: {
+      clientRequestId: params.clientRequestId,
+      serviceTypeId: towing.id,
+      lat: original.lat,
+      lng: original.lng,
+      governorate: original.governorate ?? "damascus",
+      addressText: original.addressText ?? "",
+      landmarkText: original.landmarkText ?? "",
+      carMake: original.carMake ?? "",
+      carModel: original.carModel ?? "",
+      carYear: original.carYear ?? undefined,
+      plateNumber: original.plateNumber ?? "",
+      carCategory: original.carCategory ?? undefined,
+      problemDescription: original.problemDescription ?? "",
+      problemUnknown: original.problemUnknown,
+      destinationText: params.destinationText,
+      destinationLat: params.destinationLat,
+      destinationLng: params.destinationLng,
+      vehicleCanRoll: params.vehicleCanRoll,
+      photoIds: [],
+    },
+  });
+
+  // Close the original so the customer is not left with two open requests.
+  // Best effort: a retry may find it already closed.
+  if (created.created) {
+    try {
+      await prisma.$transaction(async (tx) => {
+        const current = await loadOwned(tx, original.id, customerId);
+        if (!SEARCH_ENDED_STATUSES.includes(current.status)) return;
+        await applyTransition(tx, {
+          requestId: original.id,
+          from: current.status,
+          to: "CANCELLED_BY_CUSTOMER",
+          actor: "CUSTOMER",
+          actorUserId: customerId,
+          note: `replaced by towing request ${created.publicCode}`,
+          data: { cancelledReason: "towing fallback" },
+        });
+      });
+    } catch (error) {
+      if (!(error instanceof DomainError)) throw error;
+    }
+  }
+
+  return created;
+}
+
+// ---------------------------------------------------------------------------
+// Admin actions
+// ---------------------------------------------------------------------------
+
+export async function cancelByAdmin(params: {
+  requestId: string;
+  adminId: string;
+  reason: string;
+  ip?: string | null;
+}): Promise<void> {
+  const { requestId, adminId, reason, ip } = params;
+
+  const from = await prisma.$transaction(async (tx) => {
+    const request = await loadForTransition(tx, requestId);
+    await applyTransition(tx, {
+      requestId,
+      from: request.status,
+      to: "CANCELLED_BY_ADMIN",
+      actor: "ADMIN",
+      actorUserId: adminId,
+      note: reason,
+      data: { cancelledReason: reason },
+    });
+    await closeOpenOffers(tx, requestId);
+    return request.status;
+  });
+
+  await audit({
+    actorId: adminId,
+    action: "request.status.changed",
+    entityType: "ServiceRequest",
+    entityId: requestId,
+    metadata: { from, to: "CANCELLED_BY_ADMIN", actor: "ADMIN", reason },
+    ip,
+  });
+}
+
+/** Admin pulls a booked request back to searching (provider no-show etc.). */
+export async function reassignByAdmin(params: {
+  requestId: string;
+  adminId: string;
+  reason: string;
+  ip?: string | null;
+}): Promise<void> {
+  const { requestId, adminId, reason, ip } = params;
+
+  const from = await prisma.$transaction(async (tx) => {
+    const request = await loadForTransition(tx, requestId);
+    await releaseBooking(tx, {
+      requestId,
+      from: request.status,
+      actor: "ADMIN",
+      actorUserId: adminId,
+      note: `reassigned by admin: ${reason}`,
+    });
+    return request.status;
+  });
+
+  await audit({
+    actorId: adminId,
+    action: "request.status.changed",
+    entityType: "ServiceRequest",
+    entityId: requestId,
+    metadata: { from, to: "SEARCHING", actor: "ADMIN", reason: "reassign", note: reason },
+    ip,
+  });
+}
+
+/**
+ * Admin points a searching request at a specific provider (the manual half of
+ * hybrid dispatch). The provider sees it in their feed even if they are out of
+ * range or toggled unavailable, but still has to send an offer, and the
+ * customer still has to accept it.
+ */
+export async function inviteProvider(params: {
+  requestId: string;
+  providerUserId: string;
+  adminId: string;
+  ip?: string | null;
+}): Promise<void> {
+  const { requestId, providerUserId, adminId, ip } = params;
 
   const request = await prisma.serviceRequest.findUnique({
     where: { id: requestId },
-    select: { id: true, customerId: true, status: true },
+    select: { status: true },
+  });
+  if (!request) throw new DomainError("NOT_FOUND");
+  if (request.status !== "SEARCHING") throw new DomainError("REQUEST_NOT_OPEN");
+
+  const provider = await prisma.providerProfile.findUnique({
+    where: { userId: providerUserId },
+    select: { status: true, user: { select: { status: true } } },
+  });
+  if (!provider || provider.status !== "ACTIVE" || provider.user.status !== "ACTIVE") {
+    throw new DomainError("NOT_ELIGIBLE");
+  }
+
+  await prisma.requestInvite.upsert({
+    where: { requestId_providerId: { requestId, providerId: providerUserId } },
+    create: { requestId, providerId: providerUserId, invitedById: adminId },
+    update: {},
   });
 
-  if (!request || request.customerId !== customerId) {
-    // Same error whether it does not exist or belongs to someone else, so
-    // this cannot be used to probe for request ids.
-    throw new RequestNotFoundError();
-  }
-
-  if (!customerCanCancel(request.status as RequestStatusName)) {
-    // Let the state machine produce the precise refusal.
-    assertTransition(
-      request.status as RequestStatusName,
-      "CANCELLED_BY_CUSTOMER",
-      "CUSTOMER",
-    );
-  }
-
-  await transitionRequest({
-    requestId,
-    to: "CANCELLED_BY_CUSTOMER",
-    actor: "CUSTOMER",
-    actorUserId: customerId,
-    cancelledReason: reason || undefined,
-    note: "cancelled by customer",
+  await audit({
+    actorId: adminId,
+    action: "request.invite.sent",
+    entityType: "ServiceRequest",
+    entityId: requestId,
+    metadata: { providerUserId },
     ip,
   });
 }

@@ -1,80 +1,73 @@
 "use server";
 
-import { redirect } from "next/navigation";
+import { refresh } from "next/cache";
 import { getTranslations } from "next-intl/server";
+import { z } from "zod";
 
-import { assertSameOrigin, CsrfError } from "@/lib/auth/csrf";
+import {
+  formBool,
+  formString,
+  runAction,
+  toErrorResult,
+  type ActionResult,
+} from "@/lib/action-result";
+import { assertSameOrigin } from "@/lib/auth/csrf";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { requestOtp, verifyOtp } from "@/lib/auth/otp";
 import { createSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/db";
 import { env } from "@/lib/env";
 import { loggerFor } from "@/lib/logger";
-import { maskPhone, normalizeSyrianPhone } from "@/lib/phone";
+import { normalizeSyrianPhone } from "@/lib/phone";
 import { consumeLimit } from "@/lib/rate-limit";
 import { getRequestContext } from "@/lib/request-context";
-import { getSetting } from "@/features/settings/queries";
-import { IllegalTransitionError } from "./state-machine";
+import { readSetting } from "@/features/settings/platform";
+import { COMPLAINT_CATEGORIES, fileComplaint, rateProvider } from "@/features/feedback/service";
+import {
+  confirmCompletion,
+  disputeCompletion,
+  respondToExtraCharge,
+} from "@/features/jobs/service";
+import { acceptOfferSchema } from "@/features/offers/schemas";
+import { acceptOffer } from "@/features/offers/service";
+import { createRequestSchema, destinationSchema } from "./schemas";
 import {
   cancelByCustomer,
   createRequest,
-  IdDocumentRequiredError,
+  createTowingFallback,
   isIdRequiredFor,
-  RequestNotFoundError,
-  type CustomerIdMode,
+  restartSearch,
 } from "./service";
-import { cancelRequestSchema, createRequestSchema } from "./schemas";
 
 const log = loggerFor("requests/actions");
 
-export interface RequestActionState {
-  ok: boolean;
-  /** Namespace-qualified translation key. */
-  errorKey?: string;
-  errorValues?: Record<string, string | number>;
-  /** Set on the OTP step. */
+export interface RequestFlowState extends ActionResult<{ trackingToken: string }> {
   phone?: string;
   resendAfterSeconds?: number;
-  /** Set once the request exists, so the client can redirect to tracking. */
-  trackingToken?: string;
-  publicCode?: string;
-}
-
-const EMPTY_STATE: RequestActionState = { ok: false };
-
-async function guard(): Promise<RequestActionState | null> {
-  try {
-    await assertSameOrigin("POST");
-    return null;
-  } catch (error) {
-    if (error instanceof CsrfError) return { ok: false, errorKey: "errors.csrf" };
-    throw error;
-  }
 }
 
 // ---------------------------------------------------------------------------
-// Step 4: verify the phone, which also creates the account
+// Submitting a request (with OTP for guests)
 // ---------------------------------------------------------------------------
 
 /**
- * Sends the code for the request flow.
- *
- * Uses the REQUEST purpose rather than LOGIN so a code issued for placing a
- * request cannot be replayed against the plain login form, and vice versa.
+ * Sends the code for the request flow. The REQUEST purpose means a code
+ * issued here cannot be replayed against the plain login form.
  */
 export async function requestFlowOtpAction(
-  _prev: RequestActionState,
+  _prev: RequestFlowState,
   formData: FormData,
-): Promise<RequestActionState> {
-  const blocked = await guard();
-  if (blocked) return blocked;
-
-  const normalized = normalizeSyrianPhone(String(formData.get("phone") ?? ""));
-  if (!normalized.ok) {
-    return { ok: false, errorKey: `phoneErrors.${normalized.code}` };
+): Promise<RequestFlowState> {
+  try {
+    await assertSameOrigin("POST");
+  } catch (error) {
+    return toErrorResult(error);
   }
 
-  const locale = String(formData.get("locale") ?? "ar");
+  const normalized = normalizeSyrianPhone(formString(formData, "phone"));
+  if (!normalized.ok) return { ok: false, errorKey: `phoneErrors.${normalized.code}` };
+
+  const locale = formString(formData, "locale") || "ar";
   const context = await getRequestContext();
   const t = await getTranslations({ locale, namespace: "otpSms" });
 
@@ -90,183 +83,253 @@ export async function requestFlowOtpAction(
       ok: false,
       phone: normalized.phone,
       errorKey: `otpErrors.${result.reason}`,
-      errorValues: { seconds: result.retryAfterSeconds },
+      errorValues: { seconds: result.retryAfterSeconds ?? 0 },
     };
   }
 
-  return {
-    ok: true,
-    phone: normalized.phone,
-    resendAfterSeconds: result.resendAfterSeconds,
-  };
+  return { ok: true, phone: normalized.phone, resendAfterSeconds: result.resendAfterSeconds };
 }
 
-// ---------------------------------------------------------------------------
-// Step 5: verify the code and submit the whole request
-// ---------------------------------------------------------------------------
-
 /**
- * The one action that turns a guest's filled-in form into a real request.
+ * Turns the filled-in form into a real request.
  *
- * Verifies the code, finds or creates the account, opens a session, then
- * creates the request. Deliberately a single action: a half-finished state
- * where the account exists but the request does not would leave the customer
- * logged in on a blank page, wondering whether help is coming.
+ * A signed-in customer submits directly. A guest also sends phone + code:
+ * the code is verified, the account found or created, a session opened, then
+ * the request created - all in one action, so there is never a half state of
+ * "logged in but no request".
+ *
+ * Returns the tracking token instead of redirecting, so the browser can keep
+ * the draft until it knows the request exists. A retry with the same
+ * clientRequestId returns the same request.
  */
 export async function submitRequestAction(
-  _prev: RequestActionState,
+  _prev: RequestFlowState,
   formData: FormData,
-): Promise<RequestActionState> {
-  const blocked = await guard();
-  if (blocked) return blocked;
+): Promise<RequestFlowState> {
+  try {
+    await assertSameOrigin("POST");
+  } catch (error) {
+    return toErrorResult(error);
+  }
 
-  const locale = String(formData.get("locale") ?? "ar");
   const context = await getRequestContext();
 
-  // --- phone + code ------------------------------------------------------
-  const normalized = normalizeSyrianPhone(String(formData.get("phone") ?? ""));
-  if (!normalized.ok) {
-    return { ok: false, errorKey: `phoneErrors.${normalized.code}` };
-  }
-
-  const code = String(formData.get("code") ?? "").trim();
-  const verification = await verifyOtp(normalized.phone, code, "REQUEST", {
-    ip: context.ip,
-  });
-
-  if (!verification.ok) {
-    return {
-      ok: false,
-      phone: normalized.phone,
-      errorKey: `otpErrors.${verification.reason}`,
-      errorValues:
-        verification.attemptsLeft !== undefined
-          ? { count: verification.attemptsLeft }
-          : undefined,
-    };
-  }
-
-  // --- the request payload ------------------------------------------------
   let payload: unknown;
   try {
-    payload = JSON.parse(String(formData.get("payload") ?? "{}"));
+    payload = JSON.parse(formString(formData, "payload") || "{}");
   } catch {
-    return { ok: false, errorKey: "requests.errors.INVALID_PAYLOAD" };
+    return { ok: false, errorKey: "validation.INVALID_INPUT" };
   }
-
   const parsed = createRequestSchema.safeParse(payload);
   if (!parsed.success) {
     const issue = parsed.error.issues[0];
     log.warn({ path: issue?.path.join("."), code: issue?.message }, "request payload rejected");
-    return { ok: false, errorKey: `requests.errors.${issue?.message ?? "INVALID_PAYLOAD"}` };
+    const code = issue?.message && /^[A-Z_]+$/.test(issue.message) ? issue.message : "INVALID_INPUT";
+    return { ok: false, errorKey: `validation.${code}` };
   }
 
-  // --- account ------------------------------------------------------------
-  const user = await prisma.user.upsert({
-    where: { phone: normalized.phone },
-    create: {
-      phone: normalized.phone,
-      role: "CUSTOMER",
-      isPhoneVerified: true,
-      lastLoginAt: new Date(),
+  let userId: string;
+  const current = await getCurrentUser();
+
+  if (current && current.role !== "ADMIN") {
+    userId = current.id;
+  } else {
+    const normalized = normalizeSyrianPhone(formString(formData, "phone"));
+    if (!normalized.ok) return { ok: false, errorKey: `phoneErrors.${normalized.code}` };
+
+    const verification = await verifyOtp(normalized.phone, formString(formData, "code").trim(), "REQUEST", {
+      ip: context.ip,
+    });
+    if (!verification.ok) {
+      return {
+        ok: false,
+        phone: normalized.phone,
+        errorKey: `otpErrors.${verification.reason}`,
+        errorValues:
+          verification.attemptsLeft !== undefined ? { count: verification.attemptsLeft } : undefined,
+      };
+    }
+
+    const user = await prisma.user.upsert({
+      where: { phone: normalized.phone },
+      create: { phone: normalized.phone, role: "CUSTOMER", isPhoneVerified: true, lastLoginAt: new Date() },
+      update: { isPhoneVerified: true, lastLoginAt: new Date() },
+      select: { id: true, role: true, status: true },
+    });
+
+    if (user.status !== "ACTIVE" || user.role === "ADMIN") {
+      log.warn({ userId: user.id }, "request blocked: account not usable");
+      // Same message as a wrong code: nothing about the account leaks.
+      return { ok: false, phone: normalized.phone, errorKey: "otpErrors.INVALID_CODE" };
+    }
+
+    await createSession(user.id, false, { ip: context.ip, userAgent: context.userAgent });
+    userId = user.id;
+  }
+
+  const limit = await consumeLimit("requestCreatePerUser", userId);
+  if (!limit.allowed) return { ok: false, errorKey: "domainErrors.RATE_LIMITED" };
+
+  try {
+    const idMode = await readSetting("customerIdMode");
+    const idRequired = await isIdRequiredFor(userId, idMode);
+    const created = await createRequest({ customerId: userId, input: parsed.data, idRequired, ip: context.ip });
+    return { ok: true, data: { trackingToken: created.trackingToken } };
+  } catch (error) {
+    return toErrorResult(error);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Tracking page actions (customer)
+// ---------------------------------------------------------------------------
+
+const requestIdSchema = z.uuid();
+
+function requestIdFrom(formData: FormData): string {
+  return requestIdSchema.parse(formString(formData, "requestId"));
+}
+
+export async function cancelRequestAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  return runAction(
+    "cancelOwnRequest",
+    async ({ user, ip }) => {
+      await cancelByCustomer({
+        requestId: requestIdFrom(formData),
+        customerId: user.id,
+        reason: formString(formData, "reason").slice(0, 300) || undefined,
+        ip,
+      });
+      refresh();
+      return undefined;
     },
-    update: { isPhoneVerified: true, lastLoginAt: new Date() },
-    select: { id: true, role: true, status: true },
-  });
-
-  if (user.status !== "ACTIVE") {
-    log.warn({ userId: user.id, status: user.status }, "request blocked: account not active");
-    // Same generic message as a bad code - a blocked user should not learn
-    // that their number is the reason.
-    return { ok: false, phone: normalized.phone, errorKey: "otpErrors.INVALID_CODE" };
-  }
-
-  // Rate limited per user, after we know who they are.
-  const limit = await consumeLimit("requestCreatePerUser", user.id);
-  if (!limit.allowed) {
-    return { ok: false, errorKey: "requests.errors.RATE_LIMITED" };
-  }
-
-  await createSession(user.id, user.role === "ADMIN", {
-    ip: context.ip,
-    userAgent: context.userAgent,
-  });
-
-  // --- create -------------------------------------------------------------
-  const idMode = await getSetting<CustomerIdMode>("customerIdMode", "NEVER");
-  const idRequired = await isIdRequiredFor(user.id, idMode);
-
-  try {
-    const created = await createRequest({
-      customerId: user.id,
-      input: parsed.data,
-      idRequired,
-      ip: context.ip,
-    });
-
-    log.info(
-      { requestId: created.id, phoneMasked: maskPhone(normalized.phone) },
-      "request submitted",
-    );
-
-    redirect(`/${locale}/track/${created.trackingToken}`);
-  } catch (error) {
-    // `redirect` throws by design; let it through.
-    if (error instanceof Error && error.message === "NEXT_REDIRECT") throw error;
-
-    if (error instanceof IdDocumentRequiredError) {
-      return { ok: false, errorKey: "requests.errors.ID_REQUIRED" };
-    }
-
-    log.error({ err: error, userId: user.id }, "request creation failed");
-    return { ok: false, errorKey: "errors.genericTitle" };
-  }
+    { rateLimit: "mutationPerUser" },
+  );
 }
 
-// ---------------------------------------------------------------------------
-// Cancellation
-// ---------------------------------------------------------------------------
+export async function restartSearchAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  return runAction(
+    "createRequest",
+    async ({ user, ip }) => {
+      await restartSearch({ requestId: requestIdFrom(formData), actor: "CUSTOMER", actorUserId: user.id, ip });
+      refresh();
+      return undefined;
+    },
+    { rateLimit: "mutationPerUser" },
+  );
+}
 
-export async function cancelRequestAction(
-  _prev: RequestActionState,
+export async function towingFallbackAction(
+  _prev: ActionResult<{ trackingToken: string }>,
   formData: FormData,
-): Promise<RequestActionState> {
-  const blocked = await guard();
-  if (blocked) return blocked;
-
-  const user = await getCurrentUser();
-  if (!user) return { ok: false, errorKey: "errors.unauthorized" };
-
-  const parsed = cancelRequestSchema.safeParse({
-    requestId: formData.get("requestId"),
-    reason: formData.get("reason"),
-  });
-
-  if (!parsed.success) return { ok: false, errorKey: "requests.errors.INVALID_PAYLOAD" };
-
-  const context = await getRequestContext();
-
-  try {
-    await cancelByCustomer({
-      requestId: parsed.data.requestId,
-      customerId: user.id,
-      reason: parsed.data.reason || undefined,
-      ip: context.ip,
-    });
-
-    return { ok: true };
-  } catch (error) {
-    if (error instanceof RequestNotFoundError) {
-      return { ok: false, errorKey: "requests.errors.NOT_FOUND" };
-    }
-
-    if (error instanceof IllegalTransitionError) {
-      return { ok: false, errorKey: "requests.errors.CANNOT_CANCEL" };
-    }
-
-    log.error({ err: error, userId: user.id }, "cancellation failed");
-    return { ok: false, errorKey: "errors.genericTitle" };
-  }
+): Promise<ActionResult<{ trackingToken: string }>> {
+  return runAction(
+    "createRequest",
+    async ({ user, ip }) => {
+      const destination = destinationSchema.parse({
+        destinationText: formString(formData, "destinationText"),
+        vehicleCanRoll: formString(formData, "vehicleCanRoll") === ""
+          ? undefined
+          : formString(formData, "vehicleCanRoll") === "yes",
+      });
+      const created = await createTowingFallback({
+        requestId: requestIdFrom(formData),
+        customerId: user.id,
+        clientRequestId: z.uuid().parse(formString(formData, "clientRequestId")),
+        ...destination,
+        ip,
+      });
+      return { trackingToken: created.trackingToken };
+    },
+    { rateLimit: "requestCreatePerUser" },
+  );
 }
 
-export { EMPTY_STATE as emptyRequestActionState };
+export async function acceptOfferAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  return runAction(
+    "viewOwnRequests",
+    async ({ user, ip }) => {
+      const input = acceptOfferSchema.parse({
+        requestId: formString(formData, "requestId"),
+        offerId: formString(formData, "offerId"),
+        feeTermsAccepted: formBool(formData, "feeTermsAccepted"),
+      });
+      await acceptOffer({ requestId: input.requestId, offerId: input.offerId, actor: "CUSTOMER", actorUserId: user.id, ip });
+      refresh();
+      return undefined;
+    },
+    { rateLimit: "mutationPerUser" },
+  );
+}
+
+export async function respondExtraAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  return runAction(
+    "viewOwnRequests",
+    async ({ user, ip }) => {
+      await respondToExtraCharge({
+        customerId: user.id,
+        extraId: z.uuid().parse(formString(formData, "extraId")),
+        approve: formString(formData, "decision") === "approve",
+        ip,
+      });
+      refresh();
+      return undefined;
+    },
+    { rateLimit: "mutationPerUser" },
+  );
+}
+
+export async function confirmCompletionAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  return runAction(
+    "viewOwnRequests",
+    async ({ user, ip }) => {
+      if (!formBool(formData, "paidConfirmed")) {
+        throw new z.ZodError([{ code: "custom", path: ["paidConfirmed"], message: "PAYMENT_CONFIRMATION_REQUIRED", input: undefined }]);
+      }
+      await confirmCompletion({ customerId: user.id, requestId: requestIdFrom(formData), ip });
+      refresh();
+      return undefined;
+    },
+    { rateLimit: "mutationPerUser" },
+  );
+}
+
+export async function disputeAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  return runAction(
+    "viewOwnRequests",
+    async ({ user, ip }) => {
+      const reason = z.string().trim().min(5, "REASON_REQUIRED").max(1000).parse(formString(formData, "reason"));
+      await disputeCompletion({ customerId: user.id, requestId: requestIdFrom(formData), reason, ip });
+      refresh();
+      return undefined;
+    },
+    { rateLimit: "mutationPerUser" },
+  );
+}
+
+export async function rateAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  return runAction(
+    "rateProvider",
+    async ({ user, ip }) => {
+      const stars = z.coerce.number().int().min(1, "STARS_REQUIRED").max(5).parse(formString(formData, "stars"));
+      const comment = z.string().trim().max(500).parse(formString(formData, "comment"));
+      await rateProvider({ customerId: user.id, requestId: requestIdFrom(formData), stars, comment, ip });
+      refresh();
+      return undefined;
+    },
+    { rateLimit: "mutationPerUser" },
+  );
+}
+
+export async function complaintAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  return runAction(
+    "fileComplaint",
+    async ({ user, ip }) => {
+      const category = z.enum(COMPLAINT_CATEGORIES).parse(formString(formData, "category"));
+      const description = z.string().trim().min(5, "REASON_REQUIRED").max(2000).parse(formString(formData, "description"));
+      await fileComplaint({ userId: user.id, requestId: requestIdFrom(formData), category, description, ip });
+      return undefined;
+    },
+    { rateLimit: "complaintPerUser" },
+  );
+}

@@ -273,6 +273,33 @@ export async function readFile(
  * Marks files as belonging to a real record, so the orphan cleanup leaves
  * them alone. Called by the forms in phases 3 and 4.
  */
+/**
+ * True only when EVERY id is a live, not-yet-attached upload of one of
+ * `kinds`, owned by `ownerId`. Forms call this before attaching, so nobody can
+ * link someone else's upload (say, an ID scan) to their own record by id.
+ */
+export async function ownsAttachableFiles(
+  fileIds: string[],
+  ownerId: string,
+  kinds: FileKind[],
+  tx: Prisma.TransactionClient = prisma,
+): Promise<boolean> {
+  const unique = [...new Set(fileIds)];
+  if (unique.length === 0) return true;
+  if (unique.length !== fileIds.length) return false;
+
+  const count = await tx.uploadedFile.count({
+    where: {
+      id: { in: unique },
+      ownerId,
+      kind: { in: kinds },
+      status: "UNATTACHED",
+      deletedAt: null,
+    },
+  });
+  return count === unique.length;
+}
+
 export async function attachFiles(
   fileIds: string[],
   tx: Prisma.TransactionClient = prisma,

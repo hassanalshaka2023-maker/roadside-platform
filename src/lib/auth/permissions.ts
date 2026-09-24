@@ -26,11 +26,15 @@ export const PERMISSIONS = [
   "viewOwnRequests",
   "cancelOwnRequest",
   "rateProvider",
+  "fileComplaint",
+  "applyAsProvider",
 
   // --- provider -----------------------------------------------------------
   "viewAssignedJobs",
   "updateJobStatus",
   "updateOwnAvailability",
+  "sendOffers",
+  "editOwnProviderProfile",
 
   // --- admin: dispatch ----------------------------------------------------
   "viewAllRequests",
@@ -38,6 +42,8 @@ export const PERMISSIONS = [
   "cancelAnyRequest",
   "viewCustomers",
   "viewProviders",
+  "manageComplaints",
+  "resolveDisputes",
 
   // --- admin: vetting and administration ----------------------------------
   "viewProviderApplications",
@@ -48,6 +54,11 @@ export const PERMISSIONS = [
   "manageAdmins",
   "viewAuditLog",
   "exportData",
+  "manageUsers",
+  /** Commission policy, the provider ledger and settlements. */
+  "manageCommission",
+  /** Money figures: service value and platform commission. */
+  "viewFinancials",
 
   /**
    * The most sensitive permission in the system: opening a scan of someone's
@@ -63,6 +74,8 @@ const CUSTOMER_PERMISSIONS = [
   "viewOwnRequests",
   "cancelOwnRequest",
   "rateProvider",
+  "fileComplaint",
+  "applyAsProvider",
 ] as const satisfies readonly Permission[];
 
 /**
@@ -75,6 +88,8 @@ const PROVIDER_PERMISSIONS = [
   "viewAssignedJobs",
   "updateJobStatus",
   "updateOwnAvailability",
+  "sendOffers",
+  "editOwnProviderProfile",
 ] as const satisfies readonly Permission[];
 
 /**
@@ -88,6 +103,8 @@ const DISPATCHER_PERMISSIONS = [
   "cancelAnyRequest",
   "viewCustomers",
   "viewProviders",
+  "manageComplaints",
+  "resolveDisputes",
 ] as const satisfies readonly Permission[];
 
 /** Everything, without exception. */

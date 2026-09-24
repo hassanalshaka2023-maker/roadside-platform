@@ -3,7 +3,8 @@
  *
  * Idempotent by construction: everything is an upsert keyed on a natural
  * unique column, so running it twice changes nothing and running it against a
- * live database is safe.
+ * live database is safe. Platform settings are created ONCE and never
+ * overwritten, so an admin's changes in the panel survive a re-seed.
  *
  * This file runs under `tsx`, outside Next.js, so it deliberately does NOT
  * import from src/lib/*: those modules import "server-only", which throws
@@ -51,43 +52,59 @@ function hashPassword(plain: string): Promise<string> {
 /**
  * The seven customer-facing services.
  *
- * Passenger transport ("سائق تكسي / نقل أشخاص") is deliberately absent: it is
- * a provider role on the recruitment flyer, not a roadside-assistance service
- * a customer requests here. It appears in PROVIDER_ROLES below instead.
+ * There are NO prices here: the platform does not invent market rates. Every
+ * price comes from a provider's offer; the pricing note explains how that
+ * kind of job is priced.
  *
- * Prices are placeholders in the default currency and are shown to customers
- * as indicative only - payment is cash, agreed on site.
+ * Passenger transport is deliberately absent (deferred).
  */
 const SERVICE_TYPES = [
   {
     slug: "towing",
-    nameAr: "سطحة",
+    nameAr: "سحب وسطحة",
     nameEn: "Towing",
     descriptionAr: "نقل سيارتك إلى الورشة أو إلى أي مكان تحدّده",
     descriptionEn: "Move your car to a garage or anywhere you choose",
-    estimatedPriceMin: 10,
-    estimatedPriceMax: 40,
+    pricingNoteAr: "السعر حسب مكان الانطلاق والوجهة ونوع السيارة وحالتها.",
+    pricingNoteEn: "Priced by pickup, destination, vehicle type and condition.",
+    requiresDestination: true,
     sortOrder: 1,
   },
   {
     slug: "battery",
     nameAr: "بطارية",
     nameEn: "Battery",
-    descriptionAr: "شحن البطارية أو تبديلها في مكانك",
+    descriptionAr: "تشغيل السيارة بالاشتراك أو تبديل البطارية في مكانك",
     descriptionEn: "Jump-start or battery replacement on the spot",
-    estimatedPriceMin: 5,
-    estimatedPriceMax: 25,
+    pricingNoteAr: "رسوم الوصول والتشغيل معروفة مسبقاً. سعر البطارية الجديدة منفصل ويحتاج موافقتك.",
+    pricingNoteEn:
+      "Callout and jump-start are quoted upfront. A new battery is priced separately and needs your approval.",
+    requiresDestination: false,
     sortOrder: 2,
   },
   {
     slug: "tire-change",
     nameAr: "بنشر وإطارات",
-    nameEn: "Tyre change",
+    nameEn: "Tyres",
     descriptionAr: "تبديل الإطار أو إصلاح البنشر",
     descriptionEn: "Tyre change or puncture repair",
-    estimatedPriceMin: 3,
-    estimatedPriceMax: 10,
+    pricingNoteAr: "رسوم الوصول والعمل معروفة مسبقاً. الإطارات أو القطع إضافات تحتاج موافقتك.",
+    pricingNoteEn: "Callout and labour are quoted upfront. Tyres or parts are extras that need your approval.",
+    requiresDestination: false,
     sortOrder: 3,
+  },
+  {
+    slug: "on-site-mechanic",
+    nameAr: "ميكانيك وكهرباء",
+    nameEn: "Mechanic & electrics",
+    descriptionAr: "كشف وإصلاح أعطال الميكانيك والكهرباء في مكانك",
+    descriptionEn: "Diagnosis and repair of mechanical and electrical faults where you are",
+    pricingNoteAr:
+      "رسوم الوصول والكشف معروفة قبل التأكيد. بعد المعاينة يصلك عرض الإصلاح، وإذا رفضته تبقى رسوم الكشف فقط.",
+    pricingNoteEn:
+      "Callout and inspection are known before you confirm. After inspection you get a repair quote; if you decline it, only the inspection fee is due.",
+    requiresDestination: false,
+    sortOrder: 4,
   },
   {
     slug: "fuel-delivery",
@@ -95,9 +112,10 @@ const SERVICE_TYPES = [
     nameEn: "Fuel delivery",
     descriptionAr: "بنزين أو مازوت يصلك أينما كنت",
     descriptionEn: "Petrol or diesel delivered to you",
-    estimatedPriceMin: 5,
-    estimatedPriceMax: 15,
-    sortOrder: 4,
+    pricingNoteAr: "رسوم التوصيل معروفة مسبقاً، وثمن الوقود يُذكر في العرض.",
+    pricingNoteEn: "Delivery is quoted upfront; the fuel itself is listed in the offer.",
+    requiresDestination: false,
+    sortOrder: 5,
   },
   {
     slug: "lockout",
@@ -105,18 +123,9 @@ const SERVICE_TYPES = [
     nameEn: "Lockout",
     descriptionAr: "نسيت المفتاح داخل السيارة؟ نفتحها لك بأمان",
     descriptionEn: "Locked your keys inside? We open it safely",
-    estimatedPriceMin: 5,
-    estimatedPriceMax: 20,
-    sortOrder: 5,
-  },
-  {
-    slug: "on-site-mechanic",
-    nameAr: "ميكانيكي في الموقع",
-    nameEn: "On-site mechanic",
-    descriptionAr: "إصلاح الأعطال البسيطة في مكانك دون سحب السيارة",
-    descriptionEn: "Minor repairs where you are, no towing needed",
-    estimatedPriceMin: 5,
-    estimatedPriceMax: 30,
+    pricingNoteAr: "السعر محدّد في العرض قبل التأكيد.",
+    pricingNoteEn: "The price is fixed in the offer before you confirm.",
+    requiresDestination: false,
     sortOrder: 6,
   },
   {
@@ -125,53 +134,41 @@ const SERVICE_TYPES = [
     nameEn: "Pre-purchase inspection",
     descriptionAr: "فحص شامل للسيارة قبل أن تشتريها",
     descriptionEn: "A full check of a car before you buy it",
-    estimatedPriceMin: 15,
-    estimatedPriceMax: 40,
+    pricingNoteAr: "السعر محدّد في العرض قبل التأكيد.",
+    pricingNoteEn: "The price is fixed in the offer before you confirm.",
+    requiresDestination: false,
     sortOrder: 7,
   },
 ] as const;
 
 /**
- * Roles someone can apply for, straight from the recruitment flyer.
- * Stored as a Setting so the application form can change without a deploy.
+ * Platform settings, created ONCE. Values are validated at read time by
+ * src/features/settings/platform.ts, which also holds the defaults used when
+ * a key is missing.
  */
-const PROVIDER_ROLES = [
-  { slug: "auto-mechanic", nameAr: "ميكانيكي سيارات", nameEn: "Auto mechanic" },
-  {
-    slug: "auto-electrician",
-    nameAr: "كهربائي سيارات",
-    nameEn: "Auto electrician",
-  },
-  { slug: "tire-repair", nameAr: "كومجي / بنشرجي", nameEn: "Tyre & puncture repair" },
-  { slug: "tow-truck-driver", nameAr: "سائق سطحة", nameEn: "Tow truck driver" },
-  {
-    slug: "passenger-transport",
-    nameAr: "سائق تكسي / نقل أشخاص",
-    nameEn: "Passenger transport driver",
-    // Recruited, but not offered to customers as a request type.
-    providerOnly: true,
-  },
-] as const;
-
 const SETTINGS: Array<{ key: string; value: unknown }> = [
-  // When a customer must upload an ID: NEVER | FIRST_REQUEST_ONLY | ALWAYS
-  { key: "customerIdMode", value: "FIRST_REQUEST_ONLY" },
-  { key: "defaultCurrency", value: "USD" },
-  { key: "otpProvider", value: "console" },
-  {
-    key: "businessPhones",
-    value: ["0938503705", "0992605513", "0981488760"],
-  },
+  { key: "customerIdMode", value: "NEVER" },
+  { key: "businessPhones", value: ["0938503705", "0992605513", "0981488760"] },
   { key: "whatsappEnabled", value: true },
+  { key: "searchRadiusKm", value: 30 },
+  { key: "searchTimeoutMinutes", value: 20 },
+  { key: "offerValidityMinutes", value: 15 },
+  { key: "maxOffersPerRequest", value: 5 },
+  // The free period: commission disabled and zero.
   {
-    key: "workingHours",
-    value: { allDay: true, noteAr: "24 ساعة، كل أيام الأسبوع", noteEn: "24/7" },
+    key: "commissionPolicy",
+    value: { current: { enabled: false, rateBps: 0, base: "TOTAL" }, scheduled: null },
   },
-  {
-    key: "coverageNote",
-    value: { ar: "كافة أنحاء سوريا", en: "All regions of Syria" },
-  },
-  { key: "providerRoles", value: PROVIDER_ROLES },
+  { key: "commissionNoticeDays", value: 14 },
+];
+
+/** Keys from earlier phases that nothing reads any more. */
+const OBSOLETE_SETTINGS = [
+  "defaultCurrency",
+  "otpProvider",
+  "providerRoles",
+  "workingHours",
+  "coverageNote",
 ];
 
 // ---------------------------------------------------------------------------
@@ -227,7 +224,6 @@ async function seedAdmins() {
   });
 
   console.log(`  admins:        ${superAdmin.email} (SUPER_ADMIN), ${dispatcher.email} (DISPATCHER)`);
-  return { superAdmin, dispatcher };
 }
 
 async function seedServiceTypes() {
@@ -235,13 +231,15 @@ async function seedServiceTypes() {
     await prisma.serviceType.upsert({
       where: { slug: service.slug },
       create: { ...service, isActive: true },
-      // Names and prices are editable in the admin panel later, so only the
-      // fields that define the catalogue entry are refreshed here.
+      // isActive is left alone: an admin may have switched a service off.
       update: {
         nameAr: service.nameAr,
         nameEn: service.nameEn,
         descriptionAr: service.descriptionAr,
         descriptionEn: service.descriptionEn,
+        pricingNoteAr: service.pricingNoteAr,
+        pricingNoteEn: service.pricingNoteEn,
+        requiresDestination: service.requiresDestination,
         sortOrder: service.sortOrder,
       },
     });
@@ -254,41 +252,53 @@ async function seedSettings() {
     await prisma.setting.upsert({
       where: { key: setting.key },
       create: { key: setting.key, value: setting.value as object },
-      update: { value: setting.value as object },
+      // Admin edits win over the seed.
+      update: {},
     });
   }
-  console.log(`  settings:      ${SETTINGS.length}`);
+  await prisma.setting.deleteMany({ where: { key: { in: OBSOLETE_SETTINGS } } });
+  console.log(`  settings:      ${SETTINGS.length} (existing values kept)`);
 }
 
-/** Sample data for local testing. Never created in production. */
+/**
+ * Sample data for local testing. NEVER created in production.
+ *
+ * Every demo name starts with DEMO_PREFIX and every demo phone is in the
+ * +96393..96/0000000x range, so demo rows are obvious on every screen.
+ */
+const DEMO_PREFIX = "[تجريبي]";
+
 async function seedDemoData() {
   const customers = [
-    { phone: "+963930000001", name: "أحمد العلي", city: "دمشق" },
-    { phone: "+963940000002", name: "ليلى حسن", city: "حلب" },
+    { phone: "+963930000001", name: `${DEMO_PREFIX} أحمد`, city: "damascus" },
+    { phone: "+963940000002", name: `${DEMO_PREFIX} ليلى`, city: "aleppo" },
   ];
 
   const providers = [
     {
       phone: "+963950000003",
-      name: "سامر السطحة",
-      city: "دمشق",
+      name: `${DEMO_PREFIX} سامر - سطحة`,
+      governorate: "damascus",
       lat: 33.5138,
       lng: 36.2765,
       services: ["towing", "battery"],
+      specialties: ["tow-truck-driver"],
+      towCapacities: ["SEDAN", "SUV", "PICKUP"] as const,
     },
     {
       phone: "+963960000004",
-      name: "خالد الميكانيكي",
-      city: "حلب",
-      lat: 36.2021,
-      lng: 37.1343,
-      services: ["on-site-mechanic", "tire-change"],
+      name: `${DEMO_PREFIX} خالد - ميكانيكي`,
+      governorate: "damascus",
+      lat: 33.52,
+      lng: 36.29,
+      services: ["on-site-mechanic", "tire-change", "battery"],
+      specialties: ["auto-mechanic", "auto-electrician"],
+      towCapacities: [] as const,
     },
   ];
 
-  const customerUsers = [];
   for (const customer of customers) {
-    const user = await prisma.user.upsert({
+    await prisma.user.upsert({
       where: { phone: customer.phone },
       create: {
         phone: customer.phone,
@@ -299,10 +309,8 @@ async function seedDemoData() {
       },
       update: { name: customer.name },
     });
-    customerUsers.push(user);
   }
 
-  const providerUsers = [];
   for (const provider of providers) {
     const serviceTypeIds = (
       await prisma.serviceType.findMany({
@@ -313,119 +321,63 @@ async function seedDemoData() {
 
     const user = await prisma.user.upsert({
       where: { phone: provider.phone },
-      create: {
-        phone: provider.phone,
-        name: provider.name,
-        role: "PROVIDER",
-        isPhoneVerified: true,
-      },
+      create: { phone: provider.phone, name: provider.name, role: "PROVIDER", isPhoneVerified: true },
       update: { name: provider.name, role: "PROVIDER" },
+    });
+
+    // A demo provider carries the same approval record as a real one.
+    const application = await prisma.providerApplication.upsert({
+      where: { userId: user.id },
+      create: {
+        userId: user.id,
+        fullName: provider.name,
+        phone: provider.phone,
+        specialties: provider.specialties,
+        serviceTypes: [...provider.services],
+        governorate: provider.governorate,
+        coverageAreas: [],
+        baseLat: provider.lat,
+        baseLng: provider.lng,
+        towCapacities: [...provider.towCapacities],
+        consentTerms: true,
+        consentAccuracy: true,
+        consentNoHiddenFees: true,
+        consentAcceptedAt: new Date(),
+        status: "APPROVED",
+        submittedAt: new Date(),
+        reviewedAt: new Date(),
+        decisionReason: "demo data",
+      },
+      update: {},
     });
 
     await prisma.providerProfile.upsert({
       where: { userId: user.id },
       create: {
         userId: user.id,
+        applicationId: application.id,
         serviceTypeIds,
-        coverageAreas: [provider.city],
+        governorate: provider.governorate,
+        coverageAreas: [],
+        towCapacities: [...provider.towCapacities],
+        serviceRadiusKm: 40,
         isAvailable: true,
         currentLat: provider.lat,
         currentLng: provider.lng,
         locationUpdatedAt: new Date(),
         status: "ACTIVE",
       },
-      update: { serviceTypeIds, coverageAreas: [provider.city] },
-    });
-
-    providerUsers.push(user);
-  }
-
-  // A few requests across the lifecycle, so the admin screens have something
-  // to render in every state.
-  const towing = await prisma.serviceType.findUniqueOrThrow({
-    where: { slug: "towing" },
-  });
-  const mechanic = await prisma.serviceType.findUniqueOrThrow({
-    where: { slug: "on-site-mechanic" },
-  });
-
-  const demoRequests = [
-    {
-      key: "demo-pending",
-      customerId: customerUsers[0].id,
-      serviceTypeId: towing.id,
-      status: "PENDING" as const,
-      lat: 33.5102,
-      lng: 36.2913,
-      addressText: "دمشق - المزة",
-      landmarkText: "قرب جامع الرحمن",
-      carMake: "Kia",
-      carModel: "Rio",
-      carYear: 2014,
-      problemDescription: "السيارة لا تقلع والبطارية مشحونة",
-    },
-    {
-      key: "demo-assigned",
-      customerId: customerUsers[1].id,
-      serviceTypeId: mechanic.id,
-      status: "ASSIGNED" as const,
-      lat: 36.1985,
-      lng: 37.1541,
-      addressText: "حلب - الفرقان",
-      landmarkText: "مقابل الحديقة",
-      carMake: "Hyundai",
-      carModel: "Accent",
-      carYear: 2016,
-      problemDescription: "صوت غريب من المحرّك",
-      assignedProviderId: providerUsers[1].id,
-      assignedAt: new Date(),
-    },
-    {
-      key: "demo-completed",
-      customerId: customerUsers[0].id,
-      serviceTypeId: towing.id,
-      status: "COMPLETED" as const,
-      lat: 33.5225,
-      lng: 36.2786,
-      addressText: "دمشق - أبو رمانة",
-      carMake: "Toyota",
-      carModel: "Corolla",
-      carYear: 2012,
-      assignedProviderId: providerUsers[0].id,
-      assignedAt: new Date(),
-      acceptedAt: new Date(),
-      completedAt: new Date(),
-      finalPrice: 25,
-    },
-  ];
-
-  for (const request of demoRequests) {
-    const { key, ...data } = request;
-
-    // The demo rows need a stable identity across runs, and publicCode is
-    // generated by a sequence, so a marker in problemDescription is not
-    // enough: look the row up by an explicit demo code instead.
-    const publicCode = `RS-DEMO-${key.replace("demo-", "").toUpperCase()}`;
-
-    const existing = await prisma.serviceRequest.findUnique({ where: { publicCode } });
-    if (existing) continue;
-
-    const created = await prisma.serviceRequest.create({
-      data: { ...data, publicCode },
-    });
-
-    await prisma.requestStatusHistory.create({
-      data: {
-        requestId: created.id,
-        fromStatus: null,
-        toStatus: created.status,
-        note: "seeded demo request",
+      update: {
+        serviceTypeIds,
+        applicationId: application.id,
+        governorate: provider.governorate,
+        towCapacities: [...provider.towCapacities],
       },
     });
   }
 
   console.log(
-    `  demo data:     ${customers.length} customers, ${providers.length} providers, ${demoRequests.length} requests`,
+    `  demo data:     ${customers.length} customers, ${providers.length} approved providers (names start with ${DEMO_PREFIX})`,
   );
 }
 

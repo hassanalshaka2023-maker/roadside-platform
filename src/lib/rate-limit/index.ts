@@ -53,6 +53,14 @@ export const RATE_LIMITS = {
   requestCreatePerUser: { limit: 5, windowSeconds: HOUR },
   /** Provider applications from one IP (phase 4). */
   applicationPerIp: { limit: 5, windowSeconds: 24 * HOUR },
+  /** Saving or submitting one's own provider application. */
+  applicationSavePerUser: { limit: 30, windowSeconds: HOUR },
+  /** Offers sent by one provider. */
+  offerPerUser: { limit: 40, windowSeconds: HOUR },
+  /** Complaints filed by one user. */
+  complaintPerUser: { limit: 5, windowSeconds: 24 * HOUR },
+  /** Every other state-changing action (accept, confirm, status updates). */
+  mutationPerUser: { limit: 120, windowSeconds: 10 * MINUTE },
 
   /**
    * File uploads. Deliberately tighter than the daily quota: the quota stops
