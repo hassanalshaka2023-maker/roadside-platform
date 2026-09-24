@@ -18,7 +18,10 @@
     "db:seed": "prisma db seed",
     "db:studio": "prisma studio",
     "db:reset": "prisma migrate reset",
-    "files:cleanup": "tsx --conditions=react-server --env-file=.env scripts/cleanup-orphan-files.ts"
+    "files:cleanup": "tsx --conditions=react-server --env-file=.env scripts/cleanup-orphan-files.ts",
+    "test:integration": "node scripts/prepare-test-db.mjs && vitest run -c vitest.integration.config.mts",
+    "test:all": "npm test && npm run test:integration",
+    "jobs:sweep": "tsx --conditions=react-server --env-file=.env scripts/sweep.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
