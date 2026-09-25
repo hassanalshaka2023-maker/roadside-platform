@@ -115,6 +115,9 @@ const EnvSchemaBase = z.object({
    * "smtp" sends them, "disabled" hides the email option. Phone sign-in is
    * offered only when SMS_PROVIDER is not "stub".
    */
+  /** Shared secret for /api/cron/maintenance (Vercel Cron sends it). */
+  CRON_SECRET: z.string().min(16).optional(),
+
   EMAIL_PROVIDER: z.enum(["console", "smtp", "disabled"]).default("console"),
   SMTP_HOST: z.string().optional(),
   SMTP_PORT: z.coerce.number().int().positive().default(587),

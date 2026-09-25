@@ -58,6 +58,10 @@ const nextConfig: NextConfig = {
   // Do not advertise the framework version to attackers.
   poweredByHeader: false,
 
+  // The Next.js dev badge ("N") only shows in development. Kept on the right
+  // so it does not cover the WhatsApp button, which sits bottom-left in RTL.
+  devIndicators: { position: "bottom-right" },
+
   experimental: {
     // Detects a dropped connection, shows <OfflineBanner />, and retries the
     // pending navigation or server action once the network is back. Safe

@@ -21,7 +21,10 @@
     "files:cleanup": "tsx --conditions=react-server --env-file=.env scripts/cleanup-orphan-files.ts",
     "test:integration": "node scripts/prepare-test-db.mjs && vitest run -c vitest.integration.config.mts",
     "test:all": "npm test && npm run test:integration",
-    "jobs:sweep": "tsx --conditions=react-server --env-file=.env scripts/sweep.ts"
+    "jobs:sweep": "tsx --conditions=react-server --env-file=.env scripts/sweep.ts",
+    "postinstall": "prisma generate",
+    "vercel-build": "prisma migrate deploy && next build",
+    "email:test": "tsx scripts/send-test-email.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
