@@ -1,8 +1,12 @@
 # نجدة الطريق 24 — Najdat Al-Tariq 24
 
 Roadside assistance platform for Syria. Customers request help (towing,
-battery, tyres, fuel, lockout, on-site mechanic, pre-purchase inspection),
-providers apply and are vetted, and an admin team dispatches manually.
+battery, tyres, fuel, lockout, on-site mechanic, pre-purchase inspection).
+Approved providers nearby send priced offers, the customer accepts one, and
+the job is tracked to a cash payment confirmed by both sides. Admins vet
+providers, can invite a provider to a request, and resolve disputes.
+
+What is done, what is blocked and what is next: **[docs/STATUS.md](docs/STATUS.md)**.
 
 Arabic (RTL) is the primary language; English is secondary.
 
@@ -120,8 +124,26 @@ Go to **`/ar/login`** and enter any valid Syrian mobile number
 The console driver **refuses to start in production**, so an OTP code can
 never reach a production log.
 
-Seeded demo numbers: `0930000001`, `0940000002` (customers),
-`0950000003`, `0960000004` (providers).
+Seeded demo numbers (development only, never seeded in production; every
+demo name starts with `[تجريبي]`): `0930000001`, `0940000002` (customers),
+`0950000003` (tow truck, Damascus), `0960000004` (mechanic, Damascus).
+Both demo providers are approved and available, so a request placed near
+Damascus shows up in their feed.
+
+### Trying the whole flow locally
+
+1. Customer: `/ar/request` on a phone-sized window, pin a spot in Damascus, verify a new number.
+2. Provider: in another browser, sign in at `/ar/login` with `0960000004`, open the request, send an offer.
+3. Customer: accept the offer on the tracking page (it refreshes on its own).
+4. Provider: on the way → arrived → started → (optional extra cost) → finish with cash received.
+5. Customer: confirm completion and payment, rate.
+6. Admin: `/ar/admin` for figures, the request history, applications and settings.
+
+### Admin accounts
+
+Created by the seed from `SEED_ADMIN_*` / `SEED_DISPATCHER_*` in `.env`.
+Use long random passwords, never commit `.env`, and re-run `npm run db:seed`
+after changing them. There is no sign-up for admins.
 
 ---
 
@@ -134,7 +156,9 @@ Seeded demo numbers: `0930000001`, `0940000002` (customers),
 | `npm start` | serve the production build |
 | `npm run lint` | ESLint |
 | `npm run typecheck` | `tsc --noEmit` |
-| `npm test` | Vitest, once |
+| `npm test` | unit tests (no database) |
+| `npm run test:integration` | integration tests on a separate `*_test` database, created and migrated automatically |
+| `npm run jobs:sweep` | close expired searches (run from cron every minute in production) |
 | `npm run test:watch` | Vitest, watching |
 | `npm run db:migrate` | create/apply a migration (development) |
 | `npm run db:deploy` | apply migrations (production) |
@@ -157,8 +181,18 @@ full OTP lifecycle (expiry, attempt limits, resend cooldown, single-use
 consumption), both rate-limiter behaviours, the RBAC permission map, and admin
 lockout.
 
-The tests never touch a database: Prisma and the SMS gateway are replaced with
-in-memory fakes, and time is driven by fake timers.
+The unit tests never touch a database. Since the marketplace work they also
+cover the request state machine, money arithmetic, and every translation key.
+
+```bash
+npm run test:integration
+```
+
+Runs the business rules against real PostgreSQL: approval before work,
+simultaneous acceptance (exactly one booking), extras without approval,
+completion and cash, commission snapshots, the towing fallback and access
+between users. It uses `TEST_DATABASE_URL`, or `DATABASE_URL` with `_test`
+appended, and refuses any database whose name does not end in `_test`.
 
 ---
 
@@ -286,16 +320,17 @@ the bytes `RSF1` and no image viewer will open it.
 
 ## Notes and current limitations
 
-- **SMS delivery is unsolved.** International gateways do not deliver to
-  Syria. `SmsProvider` has a `console` driver (development) and a `stub` that
+- **SMS delivery is unsolved (blocks launch).** Several international
+  gateways advertise Syriatel/MTN delivery (EasySendSMS, BudgetSMS, D7,
+  SMS.to), none tested yet. `SmsProvider` has a `console` driver (development) and a `stub` that
   throws, ready for a local aggregator. Nothing else in the app changes when a
   real gateway is connected.
 - **Rate limiting** defaults to the in-memory driver, which is lost on restart
   and not shared between instances. Production must use
   `RATE_LIMIT_DRIVER=postgres`.
-- **Map tiles are not chosen yet.** The CSP already allows the OpenStreetMap
-  tile domains, but the public OSM tile server prohibits this kind of use —
-  a keyed provider or a self-hosted Syria extract has to be decided in phase 3.
+- **Map tiles are not chosen yet.** `MAP_TILE_URL` defaults to the public OSM
+  server, which forbids production traffic. The CSP follows whatever
+  `MAP_TILE_URL` points to.
 - **The S3 driver is untested.** No S3-compatible bucket was available while
   it was written, so `src/lib/storage/s3.ts` has never run against a real
   endpoint. Verify it before switching `STORAGE_DRIVER=s3` in production.
@@ -307,6 +342,5 @@ the bytes `RSF1` and no image viewer will open it.
 - **Malware scanning is a no-op.** `FileScanner` has the interface and
   records `scannedAt`, but nothing is actually scanned until ClamAV is wired
   in. Re-encoding every image already destroys appended payloads.
-- The request flow, provider applications and dispatch are phases 3–5. The
-  `/request` and `/apply` routes exist as honest placeholders so the primary
-  calls to action are not dead links.
+- **No push notifications yet.** Providers and customers see new requests and
+  offers through pages that refresh every 20–30 seconds.

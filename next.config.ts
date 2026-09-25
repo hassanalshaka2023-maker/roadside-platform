@@ -58,6 +58,13 @@ const nextConfig: NextConfig = {
   // Do not advertise the framework version to attackers.
   poweredByHeader: false,
 
+  experimental: {
+    // Detects a dropped connection, shows <OfflineBanner />, and retries the
+    // pending navigation or server action once the network is back. Safe
+    // because every mutation in the app is idempotent.
+    useOffline: true,
+  },
+
   async headers() {
     return [{ source: "/:path*", headers: securityHeaders }];
   },

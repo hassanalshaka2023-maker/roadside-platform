@@ -32,7 +32,7 @@ export default async function AdminPanelLayout({
   const candidates: Array<{ href: string; label: string; permission?: Permission }> = [
     { href: "/admin", label: t("dashboard") },
     { href: "/admin/requests", label: t("requests"), permission: "viewAllRequests" },
-    { href: "/admin/dispatch", label: t("dispatch"), permission: "dispatchRequests" },
+    { href: "/admin/complaints", label: t("complaints"), permission: "manageComplaints" },
     {
       href: "/admin/applications",
       label: t("applications"),

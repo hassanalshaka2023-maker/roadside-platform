@@ -19,5 +19,7 @@ export default defineConfig({
     globals: false,
     setupFiles: ["./tests/setup.ts"],
     include: ["tests/**/*.test.ts"],
+    // Needs a real database: run with `npm run test:integration`.
+    exclude: ["tests/integration/**", "node_modules/**"],
   },
 });

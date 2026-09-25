@@ -1,68 +1,116 @@
-import { getTranslations, setRequestLocale } from "next-intl/server";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { getFormatter, getTranslations, setRequestLocale } from "next-intl/server";
 
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/Card";
+import { Money } from "@/components/ui/Money";
+import { EmptyState, ErrorState } from "@/components/ui/States";
+import { ApplicationStatusBadge, StatusBadge } from "@/components/ui/StatusBadge";
+import { listForCustomer, sweepQuietly } from "@/features/requests/service";
+import { Link } from "@/i18n/navigation";
 import { requireUser } from "@/lib/auth/current-user";
+import { prisma } from "@/lib/db";
+import { loggerFor } from "@/lib/logger";
 import { toLocalFormat } from "@/lib/phone";
 
-/**
- * Example protected route: any signed-in user.
- *
- * The guard runs here, on the server, not in middleware.
- */
-export default async function AccountPage({
-  params,
-}: {
-  params: Promise<{ locale: string }>;
-}) {
+const log = loggerFor("page/account");
+
+export default async function AccountPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   setRequestLocale(locale);
 
   const user = await requireUser(locale, "customer");
-  const t = await getTranslations("account");
+  const [t, format] = await Promise.all([getTranslations(), getFormatter()]);
+  const Chevron = locale === "ar" ? ChevronLeft : ChevronRight;
+
+  await sweepQuietly();
+  let requests: Awaited<ReturnType<typeof listForCustomer>> | null = null;
+  try {
+    requests = await listForCustomer(user.id);
+  } catch (error) {
+    log.error({ err: error }, "failed to load customer requests");
+  }
+
+  const application = await prisma.providerApplication.findUnique({
+    where: { userId: user.id },
+    select: { status: true, publicReference: true },
+  });
 
   const roleLabel =
-    user.role === "ADMIN"
-      ? t("roleAdmin")
-      : user.role === "PROVIDER"
-        ? t("roleProvider")
-        : t("roleCustomer");
+    user.role === "ADMIN" ? t("account.roleAdmin") : user.role === "PROVIDER" ? t("account.roleProvider") : t("account.roleCustomer");
 
   return (
     <div className="container max-w-2xl py-10">
-      <h1 className="text-2xl">{t("title")}</h1>
-      <p className="mb-6 mt-2 text-sm text-gray-600">{t("subtitle")}</p>
+      <h1 className="text-2xl">{t("account.title")}</h1>
+      <p className="mb-6 mt-2 text-sm text-gray-600">{t("account.subtitle")}</p>
 
       <Card>
         <CardBody className="flex flex-col gap-4">
           <div className="flex items-center justify-between gap-4">
-            <span className="text-sm font-bold text-gray-600">{t("phone")}</span>
+            <span className="text-sm font-bold text-gray-600">{t("account.phone")}</span>
             <span dir="ltr" className="numeric font-bold">
               {user.phone ? toLocalFormat(user.phone) : "—"}
             </span>
           </div>
-
           <div className="flex items-center justify-between gap-4">
-            <span className="text-sm font-bold text-gray-600">{t("name")}</span>
-            <span className={user.name ? "font-bold" : "text-gray-500"}>
-              {user.name ?? t("noName")}
-            </span>
-          </div>
-
-          <div className="flex items-center justify-between gap-4">
-            <span className="text-sm font-bold text-gray-600">{t("role")}</span>
+            <span className="text-sm font-bold text-gray-600">{t("account.role")}</span>
             <Badge tone="yellow">{roleLabel}</Badge>
           </div>
+          {user.role === "PROVIDER" ? (
+            <Link href="/provider" className="font-bold text-ink underline">
+              {t("nav.providerPanel")}
+            </Link>
+          ) : application ? (
+            <div className="flex items-center justify-between gap-4">
+              <Link href="/apply" className="text-sm font-bold underline">
+                {t("account.myApplication")} ({application.publicReference})
+              </Link>
+              <ApplicationStatusBadge status={application.status} />
+            </div>
+          ) : null}
         </CardBody>
       </Card>
 
       <Card className="mt-6">
-        <CardHeader>
-          <CardTitle>{t("myRequests")}</CardTitle>
+        <CardHeader className="flex items-center justify-between">
+          <CardTitle>{t("account.myRequests")}</CardTitle>
         </CardHeader>
         <CardBody>
-          {/* Empty state now; the real list arrives with phase 3. */}
-          <p className="py-6 text-center text-gray-600">{t("noRequestsYet")}</p>
+          {requests === null ? (
+            <ErrorState title={t("errors.technicalTitle")} text={t("errors.technical")} />
+          ) : requests.length === 0 ? (
+            <EmptyState
+              title={t("account.noRequestsYet")}
+              action={
+                <Link href="/request" className="inline-flex min-h-touch items-center rounded-lg bg-brand-yellow px-4 font-extrabold text-ink">
+                  {t("home.heroCtaRequest")}
+                </Link>
+              }
+            />
+          ) : (
+            <ul className="flex flex-col divide-y divide-gray-100">
+              {requests.map((r) => (
+                <li key={r.id}>
+                  <Link href={`/track/${r.trackingToken}`} className="flex min-h-touch items-center gap-3 py-3 hover:bg-gray-50">
+                    <span className="flex-1">
+                      <span className="block font-bold">{locale === "ar" ? r.serviceType.nameAr : r.serviceType.nameEn}</span>
+                      <span className="block text-xs text-gray-500">
+                        <bdi className="numeric">{r.publicCode}</bdi> · {format.dateTime(r.createdAt, { dateStyle: "medium" })}
+                        {r.finalAmountSyp !== null && r.status === "COMPLETED" ? (
+                          <>
+                            {" · "}
+                            <Money amount={r.finalAmountSyp} />
+                          </>
+                        ) : null}
+                      </span>
+                    </span>
+                    <StatusBadge status={r.status} />
+                    <Chevron aria-hidden="true" className="h-4 w-4 text-gray-400" />
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
         </CardBody>
       </Card>
     </div>

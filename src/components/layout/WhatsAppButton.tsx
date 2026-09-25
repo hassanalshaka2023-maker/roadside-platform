@@ -1,7 +1,7 @@
 import { MessageCircle } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 
-import { getBusinessPhones } from "@/features/settings/queries";
+import { getBusinessPhones, isWhatsappEnabled } from "@/features/settings/queries";
 import { normalizeSyrianPhone } from "@/lib/phone";
 
 /**
@@ -14,7 +14,12 @@ import { normalizeSyrianPhone } from "@/lib/phone";
  * WhatsApp expects the number without a leading "+".
  */
 export async function WhatsAppButton() {
-  const [phones, t] = await Promise.all([getBusinessPhones(), getTranslations("common")]);
+  const [phones, enabled, t] = await Promise.all([
+    getBusinessPhones(),
+    isWhatsappEnabled(),
+    getTranslations("common"),
+  ]);
+  if (!enabled) return null;
 
   const first = phones.find((phone) => normalizeSyrianPhone(phone).ok);
   if (!first) return null;

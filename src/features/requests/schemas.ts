@@ -106,11 +106,19 @@ export const createRequestSchema = serviceTypeStepSchema
     destinationLat: z.number().min(32).max(37.5).optional(),
     destinationLng: z.number().min(35.5).max(42.5).optional(),
     vehicleCanRoll: z.boolean().optional(),
+    /** No pin could be placed; lat/lng is the governorate centre. */
+    locationApproximate: z.boolean().optional().default(false),
     photoIds: fileIdList,
     /** Set when settings require an ID for this request. */
     idFrontFileId: z.uuid().optional(),
     idConsentAccepted: z.boolean().optional(),
   });
+
+/** Without a pin, the landmark description is the location. */
+export const createRequestInputSchema = createRequestSchema.refine(
+  (input) => !input.locationApproximate || (input.landmarkText ?? "").trim().length >= 5,
+  { message: "LANDMARK_REQUIRED", path: ["landmarkText"] },
+);
 
 export type CreateRequestInput = z.infer<typeof createRequestSchema>;
 export type LocationStepInput = z.infer<typeof locationStepSchema>;

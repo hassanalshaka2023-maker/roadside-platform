@@ -22,11 +22,13 @@ const SUPER_ADMIN = {
   adminLevel: "SUPER_ADMIN" as const,
 };
 
-const PHOTO_KINDS: FileKindName[] = ["REQUEST_PHOTO", "EQUIPMENT_PHOTO"];
+const PHOTO_KINDS: FileKindName[] = ["REQUEST_PHOTO", "EQUIPMENT_PHOTO", "VEHICLE_PHOTO"];
 
 describe("isIdDocument", () => {
-  it("covers exactly the three identity kinds", () => {
-    expect(ID_DOCUMENT_KINDS).toEqual(["ID_FRONT", "ID_BACK", "SELFIE"]);
+  it("covers the three identity kinds and the tow-truck ownership document", () => {
+    expect(ID_DOCUMENT_KINDS).toEqual(["ID_FRONT", "ID_BACK", "SELFIE", "VEHICLE_DOCUMENT"]);
+    expect(isIdDocument("VEHICLE_DOCUMENT")).toBe(true);
+    expect(isIdDocument("VEHICLE_PHOTO")).toBe(false);
     expect(isIdDocument("ID_FRONT")).toBe(true);
     expect(isIdDocument("SELFIE")).toBe(true);
     expect(isIdDocument("REQUEST_PHOTO")).toBe(false);

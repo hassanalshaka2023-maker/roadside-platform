@@ -39,6 +39,8 @@ const kindSchema = z.enum([
   "SELFIE",
   "REQUEST_PHOTO",
   "EQUIPMENT_PHOTO",
+  "VEHICLE_PHOTO",
+  "VEHICLE_DOCUMENT",
 ]);
 
 /** Consistent JSON error shape. `errorKey` is a next-intl message key. */

@@ -310,6 +310,12 @@ export async function acceptOffer(params: AcceptOfferParams): Promise<{ alreadyA
     });
 
     return { alreadyAccepted: false };
+  }, {
+    // Generous on purpose: a slow VPS or a cold start must not turn a
+    // booking the customer is waiting on into an error. The locks involved
+    // are per request and per provider, so a slow booking blocks nobody else.
+    maxWait: 5_000,
+    timeout: 15_000,
   }).catch((error: unknown) => {
     if (error instanceof DomainError && error.code === "CONCURRENT_UPDATE") {
       throw new DomainError("ALREADY_BOOKED");

@@ -21,6 +21,16 @@ const intlMiddleware = createMiddleware(routing);
 
 const isProduction = process.env.NODE_ENV === "production";
 
+/**
+ * The origin of the configured map tile server (MAP_TILE_URL), so switching
+ * tile provider never needs a CSP edit. Placeholders like {s} become "*".
+ */
+function tileOrigin(): string[] {
+  const template = process.env.MAP_TILE_URL ?? "https://tile.openstreetmap.org/{z}/{x}/{y}.png";
+  const match = /^(https:\/\/[^/]+)/.exec(template.replace("{s}", "*"));
+  return match ? [match[1]] : [];
+}
+
 function buildCsp(nonce: string): string {
   const directives: Record<string, string[]> = {
     "default-src": ["'self'"],
@@ -49,7 +59,9 @@ function buildCsp(nonce: string): string {
       "blob:",
       // OpenStreetMap raster tiles (phase 3). Listed now so the policy does
       // not have to be relaxed in a hurry when the map lands.
+      "https://tile.openstreetmap.org",
       "https://*.tile.openstreetmap.org",
+      ...tileOrigin(),
       "https://*.basemaps.cartocdn.com",
     ],
 

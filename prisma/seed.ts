@@ -367,11 +367,17 @@ async function seedDemoData() {
         locationUpdatedAt: new Date(),
         status: "ACTIVE",
       },
+      // Demo rows are reset on every seed, so they stay in a known state.
       update: {
         serviceTypeIds,
         applicationId: application.id,
         governorate: provider.governorate,
         towCapacities: [...provider.towCapacities],
+        serviceRadiusKm: 40,
+        currentLat: provider.lat,
+        currentLng: provider.lng,
+        locationUpdatedAt: new Date(),
+        status: "ACTIVE",
       },
     });
   }

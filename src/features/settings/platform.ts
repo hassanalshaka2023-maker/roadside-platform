@@ -216,6 +216,14 @@ export async function scheduleCommissionChange(params: {
   return writeSetting("commissionPolicy", next, params.actorId, params.ip);
 }
 
+/**
+ * The first calendar day a new commission may start on, as YYYY-MM-DD. One
+ * extra day, so midnight of that date is still past the notice period.
+ */
+export function earliestCommissionDate(noticeDays: number, now: Date = new Date()): string {
+  return new Date(now.getTime() + (noticeDays + 1) * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
 /** Withdraws an announced change before it takes effect. */
 export async function cancelScheduledCommission(actorId: string, ip?: string | null) {
   const policy = await readSetting("commissionPolicy");

@@ -11,9 +11,9 @@ An ADMIN team reviews provider applications and dispatches requests MANUALLY at 
 - PROVIDER: applies, and after approval receives and handles jobs.
 - ADMIN: two levels. SUPER_ADMIN (everything, including viewing ID documents and settings) and DISPATCHER (requests and dispatch only, cannot view ID documents or change settings).
 
-## Core flow
-Customer submits request (service type, location on map, car info, phone OTP, optional ID photo depending on settings) -> admin gets notified -> admin assigns nearest available provider -> provider accepts -> on the way -> arrived -> in progress -> completed -> customer rates. Payment is CASH to the provider for now.
-Request statuses: PENDING, ASSIGNED, ACCEPTED, ON_THE_WAY, ARRIVED, IN_PROGRESS, COMPLETED, CANCELLED_BY_CUSTOMER, CANCELLED_BY_ADMIN, DECLINED, NO_PROVIDER_AVAILABLE. Transitions are enforced by a server-side state machine and every transition is logged.
+## Core flow (hybrid dispatch, decided 2026-09-25)
+Customer submits request (service, map pin or landmark, car info, phone OTP, optional photos/ID per settings) -> approved, available providers in range see it (area + approximate distance only) and send priced offers -> customer accepts one (fee terms shown) -> on the way -> arrived -> in progress (extra costs need customer approval) -> provider marks done + cash received -> customer confirms (or disputes -> admin) -> completed -> rating. Admins can invite a specific provider, reassign, cancel and resolve disputes. No offer before the search window closes -> NO_PROVIDER_AVAILABLE, with an optional towing fallback. Payment is CASH. Commission exists but is disabled/zero; changes need advance notice and are snapshotted per request.
+Request statuses: SEARCHING, CONFIRMED, ON_THE_WAY, ARRIVED, IN_PROGRESS, AWAITING_CONFIRMATION, COMPLETED, DISPUTED, CANCELLED_BY_CUSTOMER, CANCELLED_BY_PROVIDER, CANCELLED_BY_ADMIN, NO_PROVIDER_AVAILABLE, EXPIRED. Transitions are enforced by src/features/requests/state-machine.ts and every transition is logged.
 
 ## Tech stack
 - Next.js (App Router) + TypeScript (strict) + Tailwind CSS with RTL support
@@ -43,7 +43,7 @@ Request statuses: PENDING, ASSIGNED, ACCEPTED, ON_THE_WAY, ARRIVED, IN_PROGRESS,
 - Secrets only in environment variables, and .env must never be committed
 
 ## Non-goals for the MVP
-No online payments, no automatic matching, no native mobile apps, no insurance features.
+No online payments, no native mobile apps, no insurance features, no live GPS tracking or chat.
 
 ## Phases
 1. Setup, Docker, Prisma schema, migrations, seed, auth, RBAC, i18n/RTL shell
@@ -55,7 +55,7 @@ No online payments, no automatic matching, no native mobile apps, no insurance f
 7. PWA, performance pass, security review, tests, deployment docs
 
 ## How to work with me
-- Work one phase at a time. Enter plan mode first, show the plan, and wait for my approval
+- Continue phase after phase without waiting for approval (decided 2026-09-25); give a short update and commit after each. Stop only for substantive decisions
 - If something is ambiguous, ask me. Ask only what really matters, and make small assumptions explicit
 - Before saying a phase is done: run typecheck, lint, and tests, and make sure the app actually runs
 - At the end of each phase: summarize what was built, how to run and test it, decisions you made, and what you deliberately left for later. Then stop and wait
@@ -93,53 +93,50 @@ No online payments, no automatic matching, no native mobile apps, no insurance f
 - كهربائي سيارات (auto electrician)
 - كومجي / بنشرجي (tire & puncture repair)
 - سائق سطحة (tow truck driver)
-- سائق تكسي / نقل أشخاص (passenger transport driver; needs a decision, see note below)
+- سائق تكسي / نقل أشخاص: DEFERRED (not offered in the application form)
 
-## Current status (Phases 1-2 complete)
+## Current status
 
-Foundation (DB, auth, RBAC, Arabic RTL shell) plus private encrypted file
-storage. No business features yet: no request form, no provider application,
-no dispatch.
+The full marketplace works locally (customer flow, offers, jobs, cash
+completion, ratings, complaints, provider applications, provider panel, admin
+panel). **docs/STATUS.md is the source of truth** for what is done, blocked and
+next; update it at the end of every work session.
 
 ### Commands
 ```bash
 npm run dev                              # http://localhost:3000 -> /ar
-npm run db:migrate && npm run db:seed    # seed is idempotent
-npm test                                 # 190 unit tests, no DB needed
+npm run db:migrate && npm run db:seed    # seed is idempotent; settings are never overwritten
+npm test                                 # unit tests, no DB
+npm run test:integration                 # real Postgres, *_test database only
+npm run jobs:sweep                       # close expired searches (cron)
 npm run files:cleanup -- --dry-run       # unattached uploads
 npm run typecheck && npm run lint && npm run build
 ```
-Admin: `/ar/admin/login` (credentials from `SEED_*` in `.env`). Customer OTP:
-`/ar/login` — the code prints to the dev server console. Upload harness:
-`/ar/dev/uploads` (404s in production).
+Admin: `/ar/admin/login` (credentials from `SEED_*` in `.env`). OTP codes print
+to the dev server console. Demo provider `0960000004` (mechanic, Damascus).
 
 ### Key decisions
-- **Next 16.3.5**: `middleware` is deprecated, so locale routing and the
-  nonce-based CSP live in `src/proxy.ts`.
-- **Pinned deps**: Prisma 7.10.0 (npm `latest` is an 8.0.0 RC; no `url` in
-  `schema.prisma` — CLI reads `prisma.config.ts`, runtime uses
-  `@prisma/adapter-pg`) · Tailwind 3.4.19 not 4.x (v4 needs Chrome 111+ and
-  our users are on old phones) · `@node-rs/argon2` for prebuilt binaries.
-- **Local PostgreSQL 18, not Docker** (`psql` is in
-  `C:\Program Files\PostgreSQL\18\bin\`); rate limiter on Postgres, not Redis.
-- Authorization asks for a **permission**, never a role. Guards run inside
-  every page and action; `src/proxy.ts` is not a security boundary.
-- **Files**: raw-body upload (not multipart) so the size cap applies while
-  streaming; magic bytes then a full sharp re-encode, which is what strips
-  EXIF/GPS; AES-256-GCM with versioned keys in an `RSF1` envelope; stored
-  outside the project under UUID keys. ID documents are readable by
-  `viewIdDocuments` only — **not even by their owner** — every view audited
-  before any byte is sent.
+- **Next 16.3.5**: locale routing and nonce CSP live in `src/proxy.ts`;
+  `experimental.useOffline` retries actions after a dropped connection (all
+  mutations are idempotent for that reason).
+- **Pinned deps**: Prisma 7.10.0 (CLI reads `prisma.config.ts`, runtime uses
+  `@prisma/adapter-pg`) · Tailwind 3.4.19 (old phones) · `@node-rs/argon2`.
+- **Local PostgreSQL 18, not Docker** (`C:\Program Files\PostgreSQL\18\bin\`).
+- Money is integer SYP with DB CHECKs; accepted offers are frozen by a trigger;
+  one ACCEPTED offer per request (partial unique index).
+- Every mutation goes through `runAction` (src/lib/action-result.ts):
+  CSRF + permission + rate limit; `DomainError` codes map to `domainErrors.*`
+  messages, anything else is a generic technical error.
+- Authorization asks for a **permission**, never a role; ownership is re-checked
+  in services. Candidate providers never see the exact location or contact.
+- Files: ID, selfie and tow-truck ownership docs are `viewIdDocuments` only,
+  every view audited; request photos are visible to the booked provider during
+  the job only.
+- Python is not installed on this machine; use node for scripted edits.
 
 ### Known limitations
-- **No real SMS gateway** — `console` in dev, `stub` throws in production.
-  **This blocks any real launch**: customers cannot receive an OTP.
-- **Untested**: Docker files (none installed here) and the S3 driver (no
-  bucket available). Local disk only so far.
-- Malware scanning is a no-op interface; orphan cleanup is manual until
-  Phase 6 schedules it. Map tiles not chosen yet — blocks Phase 3.
-
-<!-- BEGIN:nextjs-agent-rules -->
+See docs/STATUS.md: no SMS gateway (blocks launch), map tiles not chosen,
+no push notifications, cron not set up, Docker/S3 untested, legal texts are drafts.
 
 # This is NOT the Next.js you know
 

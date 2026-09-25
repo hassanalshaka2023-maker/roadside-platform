@@ -548,6 +548,7 @@ describe("access between users", () => {
           governorate: "damascus",
           photoIds: [file.id],
           problemUnknown: true,
+          locationApproximate: false,
         },
       }),
       "NOT_FOUND",

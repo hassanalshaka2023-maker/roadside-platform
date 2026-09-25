@@ -21,7 +21,7 @@ const EMPTY: ActionState = { ok: false };
  * stays hidden for the cooldown the server reported, so the user is never
  * invited to press a button that will be refused.
  */
-export function CustomerLoginForm() {
+export function CustomerLoginForm({ next }: { next?: string }) {
   const t = useTranslations();
   const locale = useLocale();
 
@@ -116,6 +116,7 @@ export function CustomerLoginForm() {
   return (
     <form action={submitVerify} className="flex flex-col gap-5">
       <input type="hidden" name="locale" value={locale} />
+      {next ? <input type="hidden" name="next" value={next} /> : null}
       <input type="hidden" name="phone" value={sentTo} />
 
       <p className="text-center text-sm text-gray-600">

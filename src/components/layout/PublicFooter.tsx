@@ -2,6 +2,7 @@ import { Clock, MapPin, Phone } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 
 import { Logo } from "@/components/ui/Logo";
+import { Link } from "@/i18n/navigation";
 import { getBusinessPhones } from "@/features/settings/queries";
 import { normalizeSyrianPhone, toLocalFormat } from "@/lib/phone";
 
@@ -59,8 +60,14 @@ export async function PublicFooter() {
         </div>
       </div>
 
-      <div className="border-t border-white/10 py-4 text-center text-xs text-gray-400">
-        {t("brand.fullName")}
+      <div className="flex flex-wrap items-center justify-center gap-4 border-t border-white/10 py-4 text-xs text-gray-400">
+        <span>{t("brand.fullName")}</span>
+        <Link href="/terms" className="underline hover:text-white">
+          {t("legal.terms.title")}
+        </Link>
+        <Link href="/privacy" className="underline hover:text-white">
+          {t("legal.privacy.title")}
+        </Link>
       </div>
     </footer>
   );

@@ -12,7 +12,9 @@ export type UploadKind =
   | "ID_BACK"
   | "SELFIE"
   | "REQUEST_PHOTO"
-  | "EQUIPMENT_PHOTO";
+  | "EQUIPMENT_PHOTO"
+  | "VEHICLE_PHOTO"
+  | "VEHICLE_DOCUMENT";
 
 export interface UploadedFileInfo {
   id: string;
@@ -37,7 +39,7 @@ const CLIENT_MAX_DIMENSION = 1600;
 const CLIENT_JPEG_QUALITY = 0.85;
 
 /** ID documents are never shown back to the user once uploaded. */
-const ID_KINDS: UploadKind[] = ["ID_FRONT", "ID_BACK", "SELFIE"];
+const ID_KINDS: UploadKind[] = ["ID_FRONT", "ID_BACK", "SELFIE", "VEHICLE_DOCUMENT"];
 
 type Phase = "idle" | "compressing" | "uploading" | "done" | "error";
 

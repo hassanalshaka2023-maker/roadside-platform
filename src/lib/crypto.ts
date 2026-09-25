@@ -43,6 +43,19 @@ export function hashIp(ip: string | null | undefined): string | null {
   return createHmac("sha256", env.SESSION_SECRET).update(ip, "utf8").digest("hex");
 }
 
+/**
+ * A stable UUID derived from a seed (formatted as v4). Used as an
+ * idempotency key the server can recompute - e.g. "the towing fallback of
+ * request X, search round N" - so a repeated submit maps to the same row.
+ */
+export function deterministicUuid(seed: string): string {
+  const hex = createHash("sha256").update(seed, "utf8").digest("hex").slice(0, 32).split("");
+  hex[12] = "4";
+  hex[16] = ((parseInt(hex[16], 16) & 0x3) | 0x8).toString(16);
+  const s = hex.join("");
+  return `${s.slice(0, 8)}-${s.slice(8, 12)}-${s.slice(12, 16)}-${s.slice(16, 20)}-${s.slice(20)}`;
+}
+
 /** A cryptographically random, URL-safe token. 32 bytes by default. */
 export function randomToken(bytes = 32): string {
   return randomBytes(bytes).toString("base64url");

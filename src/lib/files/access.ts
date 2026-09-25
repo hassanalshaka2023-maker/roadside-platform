@@ -15,7 +15,9 @@ export type FileKindName =
   | "ID_BACK"
   | "SELFIE"
   | "REQUEST_PHOTO"
-  | "EQUIPMENT_PHOTO";
+  | "EQUIPMENT_PHOTO"
+  | "VEHICLE_PHOTO"
+  | "VEHICLE_DOCUMENT";
 
 /**
  * Identity documents. These are the most sensitive data in the system.
@@ -29,6 +31,9 @@ export const ID_DOCUMENT_KINDS: readonly FileKindName[] = [
   "ID_FRONT",
   "ID_BACK",
   "SELFIE",
+  // Proof of ownership of a tow truck: names, ID numbers, addresses. Same
+  // rules as an ID card.
+  "VEHICLE_DOCUMENT",
 ];
 
 export function isIdDocument(kind: FileKindName): boolean {
@@ -102,4 +107,6 @@ const UPLOADABLE_KINDS: readonly FileKindName[] = [
   "SELFIE",
   "REQUEST_PHOTO",
   "EQUIPMENT_PHOTO",
+  "VEHICLE_PHOTO",
+  "VEHICLE_DOCUMENT",
 ];

@@ -3,19 +3,23 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { Card, CardBody } from "@/components/ui/Card";
 import { CustomerLoginForm } from "@/features/auth/components/CustomerLoginForm";
+import { safeNextPath } from "@/features/auth/next-path";
 import { getCurrentUser } from "@/lib/auth/current-user";
 
 export default async function LoginPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ locale: string }>;
+  searchParams: Promise<{ next?: string }>;
 }) {
   const { locale } = await params;
+  const next = safeNextPath((await searchParams).next) ?? undefined;
   setRequestLocale(locale);
 
   // Already signed in: no reason to show a login form.
   const user = await getCurrentUser();
-  if (user) redirect(`/${locale}/account`);
+  if (user) redirect(`/${locale}${next ?? (user.role === "PROVIDER" ? "/provider" : "/account")}`);
 
   const t = await getTranslations("auth");
 
@@ -25,7 +29,7 @@ export default async function LoginPage({
         <CardBody className="p-6 sm:p-8">
           <h1 className="text-2xl">{t("loginTitle")}</h1>
           <p className="mb-6 mt-2 text-sm text-gray-600">{t("loginSubtitle")}</p>
-          <CustomerLoginForm />
+          <CustomerLoginForm next={next} />
         </CardBody>
       </Card>
     </div>

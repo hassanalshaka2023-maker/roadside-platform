@@ -14,6 +14,7 @@ import { env } from "@/lib/env";
 import { loggerFor } from "@/lib/logger";
 import { maskPhone } from "@/lib/phone";
 import { getRequestContext } from "@/lib/request-context";
+import { safeNextPath } from "./next-path";
 import { adminLoginSchema, requestOtpSchema, verifyOtpSchema } from "./schemas";
 
 const log = loggerFor("auth/actions");
@@ -166,7 +167,7 @@ export async function verifyOtpAction(
     ip: context.ip,
   });
 
-  redirect(`/${locale}/account`);
+  redirect(`/${locale}${safeNextPath(formData.get("next")) ?? (user.role === "PROVIDER" ? "/provider" : "/account")}`);
 }
 
 // ---------------------------------------------------------------------------

@@ -113,6 +113,10 @@ export function MapPicker({
 
     return () => {
       cancelled = true;
+      // Stop any pan/zoom animation first: removing the map mid-animation
+      // makes Leaflet read positions of panes that no longer exist.
+      mapRef.current?.stop();
+      mapRef.current?.off();
       mapRef.current?.remove();
       mapRef.current = null;
       markerRef.current = null;
@@ -127,7 +131,9 @@ export function MapPicker({
   useEffect(() => {
     if (!ready || lat === null || lng === null) return;
     markerRef.current?.setLatLng([lat, lng]);
-    mapRef.current?.setView([lat, lng], Math.max(mapRef.current.getZoom(), 16));
+    // No animation: cheaper on old phones, and nothing left in flight if the
+    // user moves to the next step straight away.
+    mapRef.current?.setView([lat, lng], Math.max(mapRef.current.getZoom(), 16), { animate: false });
   }, [lat, lng, ready]);
 
   function useMyLocation() {

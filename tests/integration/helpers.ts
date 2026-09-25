@@ -147,6 +147,7 @@ export async function makeRequest(
       plateNumber: "",
       problemDescription: "",
       problemUnknown: true,
+      locationApproximate: false,
       photoIds: [],
       ...overrides,
     },

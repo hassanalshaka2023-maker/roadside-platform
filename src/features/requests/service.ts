@@ -45,6 +45,7 @@ export const customerRequestSelect = {
   status: true,
   lat: true,
   lng: true,
+  locationApproximate: true,
   governorate: true,
   addressText: true,
   landmarkText: true,
@@ -268,6 +269,7 @@ export async function createRequest(params: CreateRequestParams): Promise<Create
           status: "SEARCHING",
           lat: input.lat,
           lng: input.lng,
+          locationApproximate: input.locationApproximate ?? false,
           governorate: input.governorate,
           addressText: input.addressText || null,
           landmarkText: input.landmarkText || null,
@@ -601,6 +603,10 @@ export async function createTowingFallback(params: {
 }): Promise<CreatedRequest> {
   const { requestId, customerId, ip } = params;
 
+  // A repeat of a fallback that already went through.
+  const previous = await findByClientId(customerId, params.clientRequestId);
+  if (previous) return { ...previous, created: false };
+
   const original = await prisma.serviceRequest.findUnique({
     where: { id: requestId },
     select: {
@@ -609,6 +615,7 @@ export async function createTowingFallback(params: {
       status: true,
       lat: true,
       lng: true,
+      locationApproximate: true,
       governorate: true,
       addressText: true,
       landmarkText: true,
@@ -646,6 +653,7 @@ export async function createTowingFallback(params: {
       serviceTypeId: towing.id,
       lat: original.lat,
       lng: original.lng,
+      locationApproximate: original.locationApproximate,
       governorate: original.governorate ?? "damascus",
       addressText: original.addressText ?? "",
       landmarkText: original.landmarkText ?? "",

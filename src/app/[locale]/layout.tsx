@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import { NextIntlClientProvider, hasLocale } from "next-intl";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 
+import { OfflineBanner } from "@/components/layout/OfflineBanner";
 import { directionOf, routing } from "@/i18n/routing";
 
 import "../globals.css";
@@ -61,7 +62,10 @@ export default async function LocaleLayout({
   return (
     <html lang={locale} dir={directionOf(locale)} className={cairo.variable}>
       <body className="min-h-dvh bg-white text-ink">
-        <NextIntlClientProvider>{children}</NextIntlClientProvider>
+        <NextIntlClientProvider>
+          <OfflineBanner />
+          {children}
+        </NextIntlClientProvider>
       </body>
     </html>
   );

@@ -4,7 +4,7 @@
  */
 import "../setup";
 
-// @ts-expect-error - plain .mjs helper shared with the prepare script
+// Plain .mjs helper shared with scripts/prepare-test-db.mjs.
 import { testDatabaseUrl } from "../../scripts/test-db-url.mjs";
 
 process.env.DATABASE_URL = (testDatabaseUrl as () => string)();

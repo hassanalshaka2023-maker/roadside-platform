@@ -1,6 +1,7 @@
 "use server";
 
 import { refresh } from "next/cache";
+import { redirect } from "next/navigation";
 import { getTranslations } from "next-intl/server";
 import { z } from "zod";
 
@@ -12,7 +13,7 @@ import {
   type ActionResult,
 } from "@/lib/action-result";
 import { assertSameOrigin } from "@/lib/auth/csrf";
-import { getCurrentUser } from "@/lib/auth/current-user";
+import { deterministicUuid } from "@/lib/crypto";
 import { requestOtp, verifyOtp } from "@/lib/auth/otp";
 import { createSession } from "@/lib/auth/session";
 import { prisma } from "@/lib/db";
@@ -30,7 +31,8 @@ import {
 } from "@/features/jobs/service";
 import { acceptOfferSchema } from "@/features/offers/schemas";
 import { acceptOffer } from "@/features/offers/service";
-import { createRequestSchema, destinationSchema } from "./schemas";
+import { DomainError } from "./errors";
+import { createRequestInputSchema, destinationSchema } from "./schemas";
 import {
   cancelByCustomer,
   createRequest,
@@ -44,6 +46,8 @@ const log = loggerFor("requests/actions");
 export interface RequestFlowState extends ActionResult<{ trackingToken: string }> {
   phone?: string;
   resendAfterSeconds?: number;
+  /** After phone verification: must this customer attach an ID? */
+  idRequired?: boolean;
 }
 
 // ---------------------------------------------------------------------------
@@ -91,18 +95,11 @@ export async function requestFlowOtpAction(
 }
 
 /**
- * Turns the filled-in form into a real request.
- *
- * A signed-in customer submits directly. A guest also sends phone + code:
- * the code is verified, the account found or created, a session opened, then
- * the request created - all in one action, so there is never a half state of
- * "logged in but no request".
- *
- * Returns the tracking token instead of redirecting, so the browser can keep
- * the draft until it knows the request exists. A retry with the same
- * clientRequestId returns the same request.
+ * Step 4 for a guest: verify the code, find or create the account, open a
+ * session. After this the browser can upload photos (uploads need a
+ * session) and submit. Admin accounts cannot place requests.
  */
-export async function submitRequestAction(
+export async function verifyRequestPhoneAction(
   _prev: RequestFlowState,
   formData: FormData,
 ): Promise<RequestFlowState> {
@@ -113,71 +110,71 @@ export async function submitRequestAction(
   }
 
   const context = await getRequestContext();
+  const normalized = normalizeSyrianPhone(formString(formData, "phone"));
+  if (!normalized.ok) return { ok: false, errorKey: `phoneErrors.${normalized.code}` };
 
-  let payload: unknown;
-  try {
-    payload = JSON.parse(formString(formData, "payload") || "{}");
-  } catch {
-    return { ok: false, errorKey: "validation.INVALID_INPUT" };
-  }
-  const parsed = createRequestSchema.safeParse(payload);
-  if (!parsed.success) {
-    const issue = parsed.error.issues[0];
-    log.warn({ path: issue?.path.join("."), code: issue?.message }, "request payload rejected");
-    const code = issue?.message && /^[A-Z_]+$/.test(issue.message) ? issue.message : "INVALID_INPUT";
-    return { ok: false, errorKey: `validation.${code}` };
-  }
-
-  let userId: string;
-  const current = await getCurrentUser();
-
-  if (current && current.role !== "ADMIN") {
-    userId = current.id;
-  } else {
-    const normalized = normalizeSyrianPhone(formString(formData, "phone"));
-    if (!normalized.ok) return { ok: false, errorKey: `phoneErrors.${normalized.code}` };
-
-    const verification = await verifyOtp(normalized.phone, formString(formData, "code").trim(), "REQUEST", {
-      ip: context.ip,
-    });
-    if (!verification.ok) {
-      return {
-        ok: false,
-        phone: normalized.phone,
-        errorKey: `otpErrors.${verification.reason}`,
-        errorValues:
-          verification.attemptsLeft !== undefined ? { count: verification.attemptsLeft } : undefined,
-      };
-    }
-
-    const user = await prisma.user.upsert({
-      where: { phone: normalized.phone },
-      create: { phone: normalized.phone, role: "CUSTOMER", isPhoneVerified: true, lastLoginAt: new Date() },
-      update: { isPhoneVerified: true, lastLoginAt: new Date() },
-      select: { id: true, role: true, status: true },
-    });
-
-    if (user.status !== "ACTIVE" || user.role === "ADMIN") {
-      log.warn({ userId: user.id }, "request blocked: account not usable");
-      // Same message as a wrong code: nothing about the account leaks.
-      return { ok: false, phone: normalized.phone, errorKey: "otpErrors.INVALID_CODE" };
-    }
-
-    await createSession(user.id, false, { ip: context.ip, userAgent: context.userAgent });
-    userId = user.id;
+  const verification = await verifyOtp(normalized.phone, formString(formData, "code").trim(), "REQUEST", {
+    ip: context.ip,
+  });
+  if (!verification.ok) {
+    return {
+      ok: false,
+      phone: normalized.phone,
+      errorKey: `otpErrors.${verification.reason}`,
+      errorValues:
+        verification.attemptsLeft !== undefined ? { count: verification.attemptsLeft } : undefined,
+    };
   }
 
-  const limit = await consumeLimit("requestCreatePerUser", userId);
-  if (!limit.allowed) return { ok: false, errorKey: "domainErrors.RATE_LIMITED" };
+  const user = await prisma.user.upsert({
+    where: { phone: normalized.phone },
+    create: { phone: normalized.phone, role: "CUSTOMER", isPhoneVerified: true, lastLoginAt: new Date() },
+    update: { isPhoneVerified: true, lastLoginAt: new Date() },
+    select: { id: true, role: true, status: true },
+  });
 
-  try {
-    const idMode = await readSetting("customerIdMode");
-    const idRequired = await isIdRequiredFor(userId, idMode);
-    const created = await createRequest({ customerId: userId, input: parsed.data, idRequired, ip: context.ip });
-    return { ok: true, data: { trackingToken: created.trackingToken } };
-  } catch (error) {
-    return toErrorResult(error);
+  if (user.status !== "ACTIVE" || user.role === "ADMIN") {
+    log.warn({ userId: user.id }, "request blocked: account not usable");
+    // Same message as a wrong code: nothing about the account leaks.
+    return { ok: false, phone: normalized.phone, errorKey: "otpErrors.INVALID_CODE" };
   }
+
+  await createSession(user.id, false, { ip: context.ip, userAgent: context.userAgent });
+  const idRequired = await isIdRequiredFor(user.id, await readSetting("customerIdMode"));
+  return { ok: true, phone: normalized.phone, idRequired };
+}
+
+/**
+ * Turns the filled-in form into a real request, for a signed-in customer.
+ *
+ * Returns the tracking token instead of redirecting, so the browser keeps its
+ * draft until it knows the request exists. IDEMPOTENT: a retry with the same
+ * clientRequestId returns the same request.
+ */
+export async function submitRequestAction(
+  _prev: RequestFlowState,
+  formData: FormData,
+): Promise<RequestFlowState> {
+  return runAction(
+    "createRequest",
+    async ({ user, ip }) => {
+      let payload: unknown;
+      try {
+        payload = JSON.parse(formString(formData, "payload") || "{}");
+      } catch {
+        payload = {};
+      }
+      const input = createRequestInputSchema.parse(payload);
+
+      const limit = await consumeLimit("requestCreatePerUser", user.id);
+      if (!limit.allowed) throw new DomainError("RATE_LIMITED");
+
+      const idMode = await readSetting("customerIdMode");
+      const idRequired = await isIdRequiredFor(user.id, idMode);
+      const created = await createRequest({ customerId: user.id, input, idRequired, ip });
+      return { trackingToken: created.trackingToken };
+    },
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -232,14 +229,18 @@ export async function towingFallbackAction(
           ? undefined
           : formString(formData, "vehicleCanRoll") === "yes",
       });
+      const requestId = requestIdFrom(formData);
       const created = await createTowingFallback({
-        requestId: requestIdFrom(formData),
+        requestId,
         customerId: user.id,
-        clientRequestId: z.uuid().parse(formString(formData, "clientRequestId")),
+        // Derived, not random: pressing the button twice (or a retry after a
+        // dropped connection) maps to the same towing request.
+        clientRequestId: deterministicUuid(`towing-fallback:${requestId}`),
         ...destination,
         ip,
       });
-      return { trackingToken: created.trackingToken };
+      const locale = formString(formData, "locale") === "en" ? "en" : "ar";
+      redirect(`/${locale}/track/${created.trackingToken}`);
     },
     { rateLimit: "requestCreatePerUser" },
   );

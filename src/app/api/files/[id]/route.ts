@@ -24,6 +24,7 @@ import {
   readFile,
 } from "@/lib/files/service";
 import { loggerFor } from "@/lib/logger";
+import { isActiveJobPhoto } from "@/features/jobs/queries";
 import { consumeLimit } from "@/lib/rate-limit";
 import { getRequestContext } from "@/lib/request-context";
 
@@ -66,11 +67,22 @@ export async function GET(
 
   const context = await getRequestContext();
 
-  const decision = canViewFile({
+  let decision = canViewFile({
     viewer: user,
     ownerId: record.ownerId,
     kind: record.kind as FileKindName,
   });
+
+  // The provider booked on a request may see its photos - during the job
+  // only. Never ID documents: those stay SUPER_ADMIN-only above.
+  if (
+    !decision.allowed &&
+    record.kind === "REQUEST_PHOTO" &&
+    user.role === "PROVIDER" &&
+    (await isActiveJobPhoto(user.id, id))
+  ) {
+    decision = { allowed: true, mustAudit: false };
+  }
 
   if (!decision.allowed) {
     log.warn(

@@ -9,6 +9,7 @@
  */
 export type DomainErrorCode =
   | "NOT_FOUND"
+  | "RATE_LIMITED"
   | "CONCURRENT_UPDATE"
   | "ILLEGAL_TRANSITION"
   | "ID_REQUIRED"
