@@ -35,6 +35,8 @@ export interface AuthUser {
   name: string | null;
   phone: string | null;
   email: string | null;
+  /** Unverified number given by an email user, for providers to call. */
+  contactPhone: string | null;
   isPhoneVerified: boolean;
 }
 
@@ -59,6 +61,7 @@ export const getCurrentUser = cache(async (): Promise<AuthUser | null> => {
       name: true,
       phone: true,
       email: true,
+      contactPhone: true,
       isPhoneVerified: true,
       status: true,
       deletedAt: true,
@@ -81,6 +84,7 @@ export const getCurrentUser = cache(async (): Promise<AuthUser | null> => {
     name: user.name,
     phone: user.phone,
     email: user.email,
+    contactPhone: user.contactPhone,
     isPhoneVerified: user.isPhoneVerified,
   };
 

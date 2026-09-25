@@ -96,6 +96,7 @@ export default async function ApplyPage({ params }: { params: Promise<{ locale: 
 
       {editable ? (
         <ApplicationForm
+          needsContactPhone={!user.phone && !user.contactPhone}
           services={services.map((s) => ({ slug: s.slug, name: locale === "ar" ? s.nameAr : s.nameEn }))}
           map={{
             tileUrl: env.MAP_TILE_URL,

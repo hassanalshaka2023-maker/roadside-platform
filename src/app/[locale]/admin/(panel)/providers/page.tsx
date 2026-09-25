@@ -7,7 +7,7 @@ import { listProviders } from "@/features/admin/queries";
 import { Link } from "@/i18n/navigation";
 import { requirePermission } from "@/lib/auth/current-user";
 import { governorateName } from "@/lib/geo";
-import { toLocalFormat } from "@/lib/phone";
+import { ContactNumber } from "@/components/ui/ContactNumber";
 
 export default async function AdminProvidersPage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
@@ -32,7 +32,7 @@ export default async function AdminProvidersPage({ params }: { params: Promise<{
                     <span className="flex-1">
                       <span className="block font-bold">{p.user.name}</span>
                       <span className="block text-xs text-gray-500">
-                        <bdi dir="ltr" className="numeric">{p.user.phone ? toLocalFormat(p.user.phone) : ""}</bdi> · {governorateName(p.governorate, locale)} ·{" "}
+                        <ContactNumber user={p.user} fallback="" /> · {governorateName(p.governorate, locale)} ·{" "}
                         {t("tracking.jobsDone", { count: p.completedJobs })}
                         {p.ratingCount > 0 ? ` · ★ ${p.ratingAverage.toFixed(1)} (${p.ratingCount})` : ""}
                       </span>

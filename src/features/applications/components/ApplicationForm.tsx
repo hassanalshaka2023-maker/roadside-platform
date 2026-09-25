@@ -38,7 +38,10 @@ export function ApplicationForm({
   initial,
   services,
   map,
+  needsContactPhone = false,
 }: {
+  /** Signed in by email with no phone on file: ask for a contact number. */
+  needsContactPhone?: boolean;
   initial: Partial<ApplicationInput> & { fullName?: string };
   services: ApplicationServiceOption[];
   map: WizardMapConfig;
@@ -79,6 +82,7 @@ export function ApplicationForm({
     (initial.equipmentPhotoIds ?? []).map((id) => existing(id, "EQUIPMENT_PHOTO")!),
   );
 
+  const [contactPhone, setContactPhone] = useState("");
   const [pending, startTransition] = useTransition();
   const [result, setResult] = useState<{ ok: boolean; errorKey?: string; intent?: string } | null>(null);
   const [showMissing, setShowMissing] = useState(false);
@@ -146,6 +150,7 @@ export function ApplicationForm({
     const formData = new FormData();
     formData.set("payload", JSON.stringify(buildInput()));
     formData.set("intent", intent);
+    if (needsContactPhone) formData.set("contactPhone", contactPhone);
     startTransition(async () => {
       const response = await saveApplicationAction({ ok: false }, formData);
       setResult({ ok: response.ok, errorKey: response.errorKey, intent });
@@ -201,6 +206,11 @@ export function ApplicationForm({
         <FormField htmlFor="fullName" label={t("apply.fullName")} required>
           <Input id="fullName" value={form.fullName} maxLength={100} onChange={(e) => set("fullName", e.target.value)} />
         </FormField>
+        {needsContactPhone ? (
+          <FormField htmlFor="contactPhone" label={t("auth.contactPhoneLabel")} hint={t("auth.contactPhoneHint")} required>
+            <Input id="contactPhone" type="tel" dir="ltr" inputMode="tel" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder={t("auth.phonePlaceholder")} />
+          </FormField>
+        ) : null}
         <fieldset className="flex flex-col gap-1">
           <legend className="mb-1 text-sm font-bold">{t("apply.providerKind")}</legend>
           {(["INDEPENDENT", "WORKSHOP"] as const).map((kind) => (

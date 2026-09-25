@@ -11,7 +11,7 @@ import { Link } from "@/i18n/navigation";
 import { requireUser } from "@/lib/auth/current-user";
 import { prisma } from "@/lib/db";
 import { loggerFor } from "@/lib/logger";
-import { toLocalFormat } from "@/lib/phone";
+import { ContactNumber } from "@/components/ui/ContactNumber";
 
 const log = loggerFor("page/account");
 
@@ -48,10 +48,16 @@ export default async function AccountPage({ params }: { params: Promise<{ locale
         <CardBody className="flex flex-col gap-4">
           <div className="flex items-center justify-between gap-4">
             <span className="text-sm font-bold text-gray-600">{t("account.phone")}</span>
-            <span dir="ltr" className="numeric font-bold">
-              {user.phone ? toLocalFormat(user.phone) : "—"}
+            <span className="font-bold">
+              <ContactNumber user={user} />
             </span>
           </div>
+          {user.email ? (
+            <div className="flex items-center justify-between gap-4">
+              <span className="text-sm font-bold text-gray-600">{t("auth.emailLabel")}</span>
+              <bdi dir="ltr" className="font-bold">{user.email}</bdi>
+            </div>
+          ) : null}
           <div className="flex items-center justify-between gap-4">
             <span className="text-sm font-bold text-gray-600">{t("account.role")}</span>
             <Badge tone="yellow">{roleLabel}</Badge>

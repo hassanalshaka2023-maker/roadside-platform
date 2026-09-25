@@ -80,7 +80,7 @@
   },
   "auth": {
     "loginTitle": "Sign in",
-    "loginSubtitle": "Enter your phone number and we will send you a code",
+    "loginSubtitle": "Enter your phone number or email and we will send you a code",
     "phoneLabel": "Phone number",
     "phonePlaceholder": "09XXXXXXXX",
     "phoneHint": "A Syrian number starting with 09",
@@ -98,7 +98,18 @@
     "adminLoginSubtitle": "This page is for staff only",
     "emailLabel": "Email",
     "passwordLabel": "Password",
-    "signIn": "Sign in"
+    "signIn": "Sign in",
+    "byPhone": "Phone",
+    "byEmail": "Email",
+    "channelLabel": "Where to send the code",
+    "emailHint": "We will email you the code",
+    "otpSubtitleEmail": "We sent a 6-digit code to {email}",
+    "contactPhoneLabel": "Contact phone number",
+    "contactPhoneHint": "So the provider can call you. We do not verify it by SMS, so make sure it is right.",
+    "unverified": "not verified",
+    "checkSpam": "No email? Check your spam folder",
+    "noChannel": "Sign-in is not available right now. Contact us on the numbers at the bottom of the page.",
+    "channelDisabled": "This option is not available right now. Use the other one."
   },
   "phoneErrors": {
     "EMPTY": "Please enter your phone number",
@@ -258,7 +269,8 @@
     "sendNote": "Sending is free and commits you to nothing. No provider is booked until you accept their offer.",
     "phoneTitle": "Your phone number",
     "phoneHint": "We will send you a code. Your number is only shown to the provider you accept.",
-    "idWhy": "Required by platform settings for a first request. Stored encrypted; the provider never sees it."
+    "idWhy": "Required by platform settings for a first request. Stored encrypted; the provider never sees it.",
+    "contactHintBoth": "We send a code to your phone or email. Your number is only shown to the provider whose offer you accept."
   },
   "validation": {
     "INVALID_INPUT": "Some details are not valid. Check them and try again",
@@ -314,7 +326,8 @@
     "APPLICATION_LOCKED": "The application cannot be changed in its current state",
     "APPLICATION_INCOMPLETE": "The application is incomplete. Fill in the missing fields and send it",
     "INVALID_DECISION": "This decision is not possible now, or it needs a reason",
-    "PROVIDER_ROLE_CONFLICT": "This account cannot register as a provider"
+    "PROVIDER_ROLE_CONFLICT": "This account cannot register as a provider",
+    "CONTACT_PHONE_REQUIRED": "Add a valid contact phone number (starting with 09)"
   },
   "tracking": {
     "code": "Request number",
@@ -938,5 +951,12 @@
   "metadata": {
     "title": "Najdat Al-Tariq 24 — roadside help in Syria",
     "description": "Request a mechanic, battery, tyre repair or tow truck. Approved providers nearby send offers, and you see the price before you agree. Pay in cash."
+  },
+  "emailErrors": {
+    "INVALID": "That email address is not valid. Example: name@gmail.com"
+  },
+  "otpEmail": {
+    "subject": "Your Najdat Al-Tariq 24 sign-in code",
+    "body": "Your Najdat Al-Tariq 24 code is {code}\n\nValid for {minutes} minutes. Do not share it.\n\nIf you did not ask for this code, ignore this email."
   }
 }

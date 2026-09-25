@@ -20,6 +20,8 @@ export async function listRequests(filters: { status?: RequestStatus; q?: string
     where.OR = [
       { publicCode: { contains: q.toUpperCase() } },
       { customer: { phone: { contains: q.replace(/^0/, "") } } },
+      { customer: { contactPhone: { contains: q.replace(/^0/, "") } } },
+      { customer: { email: { contains: q.toLowerCase() } } },
     ];
   }
   return prisma.serviceRequest.findMany({
@@ -32,7 +34,7 @@ export async function listRequests(filters: { status?: RequestStatus; q?: string
       createdAt: true,
       finalAmountSyp: true,
       serviceType: { select: { nameAr: true, nameEn: true } },
-      customer: { select: { name: true, phone: true } },
+      customer: { select: { name: true, phone: true, contactPhone: true, email: true } },
       assignedProvider: { select: { name: true } },
       _count: { select: { offers: { where: { status: "PENDING" } } } },
     },
@@ -46,10 +48,10 @@ export async function getRequestAdmin(id: string) {
     where: { id },
     include: {
       serviceType: true,
-      customer: { select: { id: true, name: true, phone: true, status: true } },
-      assignedProvider: { select: { id: true, name: true, phone: true } },
+      customer: { select: { id: true, name: true, phone: true, contactPhone: true, email: true, status: true } },
+      assignedProvider: { select: { id: true, name: true, phone: true, contactPhone: true } },
       offers: {
-        include: { provider: { select: { name: true, phone: true } } },
+        include: { provider: { select: { name: true, phone: true, contactPhone: true } } },
         orderBy: { createdAt: "desc" },
       },
       extraCharges: { orderBy: { createdAt: "asc" } },
@@ -86,7 +88,7 @@ export async function candidateProvidersForRequest(request: { serviceTypeId: str
       serviceRadiusKm: true,
       ratingAverage: true,
       ratingCount: true,
-      user: { select: { name: true, phone: true } },
+      user: { select: { name: true, phone: true, contactPhone: true } },
     },
     take: 200,
   });
@@ -156,7 +158,7 @@ export async function listProviders() {
       ratingCount: true,
       completedJobs: true,
       applicationId: true,
-      user: { select: { name: true, phone: true, status: true } },
+      user: { select: { name: true, phone: true, contactPhone: true, status: true } },
     },
     orderBy: { createdAt: "desc" },
     take: 200,
@@ -167,7 +169,7 @@ export async function getProviderAdmin(userId: string) {
   return prisma.providerProfile.findUnique({
     where: { userId },
     include: {
-      user: { select: { id: true, name: true, phone: true, status: true, createdAt: true } },
+      user: { select: { id: true, name: true, phone: true, contactPhone: true, email: true, status: true, createdAt: true } },
       application: { select: { id: true, publicReference: true, status: true } },
     },
   });
@@ -177,12 +179,23 @@ export async function listCustomers(q?: string) {
   return prisma.user.findMany({
     where: {
       role: { in: ["CUSTOMER", "PROVIDER"] },
-      ...(q ? { OR: [{ phone: { contains: q.replace(/^0/, "") } }, { name: { contains: q, mode: "insensitive" } }] } : {}),
+      ...(q
+        ? {
+            OR: [
+              { phone: { contains: q.replace(/^0/, "") } },
+              { contactPhone: { contains: q.replace(/^0/, "") } },
+              { email: { contains: q.toLowerCase() } },
+              { name: { contains: q, mode: "insensitive" } },
+            ],
+          }
+        : {}),
     },
     select: {
       id: true,
       name: true,
       phone: true,
+      contactPhone: true,
+      email: true,
       role: true,
       status: true,
       createdAt: true,

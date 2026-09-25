@@ -34,6 +34,11 @@ export async function getOwnProfile(userId: string) {
   });
 }
 
+/** An unverified contact number for an account that signed in by email. */
+export async function setContactPhone(userId: string, phone: string): Promise<void> {
+  await prisma.user.update({ where: { id: userId }, data: { contactPhone: phone } });
+}
+
 export async function setAvailability(userId: string, available: boolean): Promise<void> {
   const profile = await prisma.providerProfile.findUnique({
     where: { userId },

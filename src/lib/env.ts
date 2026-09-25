@@ -109,6 +109,24 @@ const EnvSchemaBase = z.object({
 
   // --- SMS / OTP ----------------------------------------------------------
   SMS_PROVIDER: z.enum(["console", "stub"]).default("console"),
+
+  /**
+   * Sign-in codes by email: "console" prints them (development only),
+   * "smtp" sends them, "disabled" hides the email option. Phone sign-in is
+   * offered only when SMS_PROVIDER is not "stub".
+   */
+  EMAIL_PROVIDER: z.enum(["console", "smtp", "disabled"]).default("console"),
+  SMTP_HOST: z.string().optional(),
+  SMTP_PORT: z.coerce.number().int().positive().default(587),
+  /** true for port 465 (implicit TLS); false for 587 (STARTTLS). */
+  SMTP_SECURE: z
+    .enum(["true", "false"])
+    .default("false")
+    .transform((v) => v === "true"),
+  SMTP_USER: z.string().optional(),
+  SMTP_PASS: z.string().optional(),
+  /** e.g. "نجدة الطريق 24 <no-reply@example.com>" */
+  EMAIL_FROM: z.string().optional(),
   OTP_LENGTH: z.coerce.number().int().min(4).max(10).default(6),
   OTP_TTL_SECONDS: z.coerce.number().int().positive().default(300),
   OTP_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
@@ -229,6 +247,14 @@ const EnvSchema = EnvSchemaBase.superRefine((value, ctx) => {
       path: ["UPLOADS_DIR"],
       message: "UPLOADS_DIR is required when STORAGE_DRIVER=local",
     });
+  }
+
+  if (value.EMAIL_PROVIDER === "smtp") {
+    for (const key of ["SMTP_HOST", "SMTP_USER", "SMTP_PASS", "EMAIL_FROM"] as const) {
+      if (!value[key]) {
+        ctx.addIssue({ code: "custom", path: [key], message: `${key} is required when EMAIL_PROVIDER=smtp` });
+      }
+    }
   }
 
   if (value.STORAGE_DRIVER === "s3") {

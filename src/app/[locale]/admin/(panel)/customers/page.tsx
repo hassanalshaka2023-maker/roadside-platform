@@ -9,7 +9,7 @@ import { setUserStatusAction } from "@/features/admin/actions";
 import { listCustomers } from "@/features/admin/queries";
 import { requirePermission } from "@/lib/auth/current-user";
 import { can } from "@/lib/auth/permissions";
-import { toLocalFormat } from "@/lib/phone";
+import { ContactNumber } from "@/components/ui/ContactNumber";
 
 export default async function AdminCustomersPage({
   params,
@@ -45,7 +45,7 @@ export default async function AdminCustomersPage({
                   <span className="flex-1">
                     <span className="block font-bold">{u.name ?? "—"}</span>
                     <span className="block text-xs text-gray-500">
-                      <bdi dir="ltr" className="numeric">{u.phone ? toLocalFormat(u.phone) : ""}</bdi> ·{" "}
+                      <ContactNumber user={u} fallback="" /> ·{" "}
                       {u.role === "PROVIDER" ? t("account.roleProvider") : t("account.roleCustomer")} · {t("admin.requestCount", { count: u._count.requestsAsCustomer })} ·{" "}
                       {format.dateTime(u.createdAt, { dateStyle: "short" })}
                     </span>

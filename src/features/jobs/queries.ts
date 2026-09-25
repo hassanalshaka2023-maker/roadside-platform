@@ -81,7 +81,7 @@ export async function getJobForProvider(providerUserId: string, requestId: strin
           calloutDueIfDeclined: true,
         },
       },
-      customer: { select: { name: true, phone: true } },
+      customer: { select: { name: true, phone: true, contactPhone: true } },
     },
   });
   if (!job) return null;

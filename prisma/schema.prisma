@@ -201,8 +201,15 @@ model User {
   adminLevel       AdminLevel?
   /// E.164, e.g. +963912345678. Null for admins, who log in by email.
   phone            String?     @unique
-  /// Null for customers and providers, who log in by phone + OTP.
+  /// Admins sign in with email + password. Customers and providers may sign
+  /// in with an emailed code instead of SMS (while no SMS gateway exists).
   email            String?     @unique
+  isEmailVerified  Boolean     @default(false)
+  /// A phone number typed by someone who signed in by EMAIL, so a provider
+  /// can call them. NOT verified and NOT an identity: phone sign-in never
+  /// looks at this column, so nobody can take over an account by typing
+  /// someone else's number here.
+  contactPhone     String?
   /// argon2id. Admins only.
   passwordHash     String?
   name             String?
@@ -269,6 +276,8 @@ model Session {
 /// HMAC-SHA256 of it, keyed by OTP_HMAC_SECRET.
 model OtpCode {
   id         String     @id @default(uuid()) @db.Uuid
+  /// The destination: an E.164 phone number, or a lowercased email address
+  /// (contains "@") when the code was sent by email.
   phone      String
   codeHash   String
   purpose    OtpPurpose

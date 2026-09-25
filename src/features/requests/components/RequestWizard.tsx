@@ -1,24 +1,21 @@
 "use client";
 
-import { useActionState, useEffect, useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { ArrowLeft, ArrowRight, HelpCircle, MapPinOff } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/Button";
-import { Countdown } from "@/components/ui/Countdown";
 import { FileUploadField, type UploadedFileInfo } from "@/components/ui/FileUploadField";
 import { fieldAria, FormField } from "@/components/ui/FormField";
 import { IdPrivacyNotice } from "@/components/ui/IdPrivacyNotice";
 import { Input } from "@/components/ui/Input";
 import { MapPicker } from "@/components/ui/MapPicker";
-import { OtpInput } from "@/components/ui/OtpInput";
-import { PhoneInput } from "@/components/ui/PhoneInput";
 import { Select } from "@/components/ui/Select";
 import { Textarea } from "@/components/ui/Textarea";
+import { CodeSignInForm } from "@/features/auth/components/CodeSignInForm";
 import { useRouter } from "@/i18n/navigation";
 import { cn } from "@/lib/cn";
 import { GOVERNORATES, governorateBySlug, nearestGovernorate } from "@/lib/geo";
-import { maskPhone } from "@/lib/phone";
 import {
   requestFlowOtpAction,
   submitRequestAction,
@@ -133,6 +130,8 @@ export function RequestWizard({
   signedIn: initiallySignedIn,
   map,
   idRequired: initialIdRequired,
+  channels,
+  needsContactPhone = false,
   preselectedServiceId,
 }: {
   services: WizardService[];
@@ -141,6 +140,10 @@ export function RequestWizard({
   /** Known on the server for a signed-in customer; for a guest it arrives
    *  with the phone verification. */
   idRequired: boolean;
+  /** Which sign-in channels are open (phone needs an SMS gateway). */
+  channels: { phone: boolean; email: boolean };
+  /** Signed in by email without any phone number on file. */
+  needsContactPhone?: boolean;
   preselectedServiceId?: string;
 }) {
   const t = useTranslations();
@@ -153,6 +156,7 @@ export function RequestWizard({
   const [idRequired, setIdRequired] = useState(initialIdRequired);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [idConsent, setIdConsent] = useState(false);
+  const [contactPhone, setContactPhone] = useState("");
 
   // Restore a saved draft once, on the client. Deliberately after mount: the
   // server cannot see localStorage, and rendering differently on the first
@@ -291,6 +295,7 @@ export function RequestWizard({
     };
     const formData = new FormData();
     formData.set("payload", JSON.stringify(payload));
+    if (needsContactPhone) formData.set("contactPhone", contactPhone);
 
     startSubmit(async () => {
       const result = await submitRequestAction(EMPTY_STATE, formData);
@@ -582,14 +587,24 @@ export function RequestWizard({
 
       {/* 4. Phone ------------------------------------------------------------- */}
       {draft.step === "phone" && !signedIn ? (
-        <PhoneStep
-          onVerified={(needsId) => {
-            setSignedIn(true);
-            setIdRequired(needsId);
-            goTo("review");
-          }}
-          onBack={() => goTo("details")}
-        />
+        <section className="flex flex-col gap-4">
+          <h2 className="text-xl">{t("wizard.phoneTitle")}</h2>
+          <p className="text-sm text-gray-600">{t(channels.email ? "wizard.contactHintBoth" : "wizard.phoneHint")}</p>
+          <CodeSignInForm
+            channels={channels}
+            sendAction={requestFlowOtpAction}
+            verifyAction={verifyRequestPhoneAction}
+            askContactPhone
+            onVerified={(state) => {
+              setSignedIn(true);
+              setIdRequired(Boolean(state.idRequired));
+              goTo("review");
+            }}
+          />
+          <Button variant="ghost" onClick={() => goTo("details")}>
+            {t("common.back")}
+          </Button>
+        </section>
       ) : null}
 
       {/* 5. Review and send --------------------------------------------------- */}
@@ -670,6 +685,12 @@ export function RequestWizard({
             </div>
           ) : null}
 
+          {needsContactPhone ? (
+            <FormField htmlFor="contactPhone" label={t("auth.contactPhoneLabel")} hint={t("auth.contactPhoneHint")} required>
+              <Input id="contactPhone" type="tel" dir="ltr" inputMode="tel" value={contactPhone} onChange={(e) => setContactPhone(e.target.value)} placeholder={t("auth.phonePlaceholder")} />
+            </FormField>
+          ) : null}
+
           {submitState.errorKey ? (
             <p role="alert" className="rounded-lg bg-danger-soft p-3 text-sm font-semibold text-danger">
               {t(submitState.errorKey, submitState.errorValues)}
@@ -714,86 +735,5 @@ function StepNav({ onBack, onNext }: { onBack: () => void; onNext: () => void })
         <Next aria-hidden="true" className="h-5 w-5" />
       </Button>
     </div>
-  );
-}
-
-/** Phone number, then the six-digit code. Opens a session on success. */
-function PhoneStep({ onVerified, onBack }: { onVerified: (idRequired: boolean) => void; onBack: () => void }) {
-  const t = useTranslations();
-  const locale = useLocale();
-  const [phone, setPhone] = useState("");
-  const [code, setCode] = useState("");
-  const [sendState, send, sending] = useActionState(requestFlowOtpAction, EMPTY_STATE);
-  const [verifyState, verify, verifying] = useActionState(verifyRequestPhoneAction, EMPTY_STATE);
-  const [seen, setSeen] = useState(sendState);
-  const [attempt, setAttempt] = useState(0);
-
-  if (sendState !== seen) {
-    setSeen(sendState);
-    setAttempt((n) => n + 1);
-  }
-
-  useEffect(() => {
-    if (verifyState.ok) onVerified(Boolean(verifyState.idRequired));
-  }, [verifyState, onVerified]);
-
-  const sentTo = sendState.ok ? sendState.phone : undefined;
-
-  if (!sentTo) {
-    return (
-      <form action={send} className="flex flex-col gap-4">
-        <h2 className="text-xl">{t("wizard.phoneTitle")}</h2>
-        <p className="text-sm text-gray-600">{t("wizard.phoneHint")}</p>
-        <input type="hidden" name="locale" value={locale} />
-        <FormField
-          htmlFor="phone"
-          label={t("auth.phoneLabel")}
-          hint={t("auth.phoneHint")}
-          error={sendState.errorKey ? t(sendState.errorKey, sendState.errorValues) : undefined}
-          required
-        >
-          <PhoneInput id="phone" name="phone" value={phone} onChange={setPhone} placeholder={t("auth.phonePlaceholder")} hasError={Boolean(sendState.errorKey)} />
-        </FormField>
-        <Button type="submit" size="lg" fullWidth isLoading={sending} loadingLabel={t("common.sending")}>
-          {t("auth.sendCode")}
-        </Button>
-        <Button variant="ghost" onClick={onBack}>
-          {t("common.back")}
-        </Button>
-      </form>
-    );
-  }
-
-  return (
-    <form action={verify} className="flex flex-col gap-4">
-      <h2 className="text-xl">{t("auth.otpTitle")}</h2>
-      <p className="text-sm text-gray-600">{t("auth.otpSubtitle", { phone: maskPhone(sentTo) })}</p>
-      <input type="hidden" name="locale" value={locale} />
-      <input type="hidden" name="phone" value={sentTo} />
-      <input type="hidden" name="code" value={code} />
-      <FormField
-        htmlFor="otp"
-        label={t("auth.otpLabel")}
-        error={verifyState.errorKey ? t(verifyState.errorKey, verifyState.errorValues) : undefined}
-        className="items-center"
-        required
-      >
-        <OtpInput id="otp" value={code} onChange={setCode} label={t("auth.otpLabel")} hasError={Boolean(verifyState.errorKey)} disabled={verifying} autoFocus />
-      </FormField>
-      <Button type="submit" size="lg" fullWidth isLoading={verifying} loadingLabel={t("common.loading")} disabled={code.length < 6}>
-        {t("auth.verify")}
-      </Button>
-      <Countdown
-        key={attempt}
-        seconds={sendState.resendAfterSeconds ?? 0}
-        whenDone={
-          <Button type="submit" formAction={send} variant="ghost" size="sm" disabled={sending}>
-            {t("auth.resend")}
-          </Button>
-        }
-      >
-        {(remaining) => <p className="text-center text-sm text-gray-500">{t("auth.resendIn", { seconds: remaining })}</p>}
-      </Countdown>
-    </form>
   );
 }

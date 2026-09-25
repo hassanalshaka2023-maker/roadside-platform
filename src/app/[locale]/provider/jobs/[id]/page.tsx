@@ -25,8 +25,8 @@ import { COMPLAINT_CATEGORIES } from "@/features/feedback/service";
 import { Link } from "@/i18n/navigation";
 import { requireRole } from "@/lib/auth/current-user";
 import { governorateName } from "@/lib/geo";
-import { toLocalFormat } from "@/lib/phone";
 import { Select } from "@/components/ui/Select";
+import { ContactNumber, contactNumberOf } from "@/components/ui/ContactNumber";
 
 export default async function ProviderJobPage({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { locale, id } = await params;
@@ -72,13 +72,13 @@ export default async function ProviderJobPage({ params }: { params: Promise<{ lo
           {job.showContact && job.customer ? (
             <>
               <p className="font-extrabold">{job.customer.name || t("provider.job.customer")}</p>
-              {job.customer.phone ? (
+              {contactNumberOf(job.customer) ? (
                 <a
-                  href={`tel:${job.customer.phone}`}
+                  href={`tel:${contactNumberOf(job.customer)!.number}`}
                   className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-lg bg-brand-red px-5 text-lg font-extrabold text-white"
                 >
                   <Phone aria-hidden="true" className="h-5 w-5" />
-                  {t("provider.job.call")} <bdi dir="ltr" className="numeric">{toLocalFormat(job.customer.phone)}</bdi>
+                  {t("provider.job.call")} <ContactNumber user={job.customer} />
                 </a>
               ) : null}
               {mapUrl ? (

@@ -28,7 +28,7 @@ import { requirePermission } from "@/lib/auth/current-user";
 import { can } from "@/lib/auth/permissions";
 import { governorateName } from "@/lib/geo";
 import { bpsToPercent } from "@/lib/money";
-import { toLocalFormat } from "@/lib/phone";
+import { ContactNumber } from "@/components/ui/ContactNumber";
 
 export default async function AdminRequestPage({ params }: { params: Promise<{ locale: string; id: string }> }) {
   const { locale, id } = await params;
@@ -49,7 +49,6 @@ export default async function AdminRequestPage({ params }: { params: Promise<{ l
   const invited = new Set(r.invites.map((i) => i.providerId));
   const hidden = (name: string, value: string) => <input type="hidden" name={name} value={value} />;
   const idField = hidden("requestId", r.id);
-  const phone = (p: string | null) => (p ? <bdi dir="ltr" className="numeric">{toLocalFormat(p)}</bdi> : "—");
 
   return (
     <div className="mx-auto flex max-w-4xl flex-col gap-4">
@@ -73,7 +72,7 @@ export default async function AdminRequestPage({ params }: { params: Promise<{ l
           <CardBody>
             <dl className="text-sm">
               <Field label={t("account.name")}>{r.customer.name ?? "—"}</Field>
-              <Field label={t("account.phone")}>{phone(r.customer.phone)}</Field>
+              <Field label={t("account.phone")}><ContactNumber user={r.customer} /></Field>
               <Field label={t("wizard.governorate")}>
                 {governorateName(r.governorate, locale)}
                 {r.locationApproximate ? ` — ${t("wizard.approximate")}` : ""}
@@ -111,7 +110,7 @@ export default async function AdminRequestPage({ params }: { params: Promise<{ l
               <Field label={t("admin.provider")}>
                 {r.assignedProvider ? (
                   <>
-                    {r.assignedProvider.name} {phone(r.assignedProvider.phone)}
+                    {r.assignedProvider.name} <ContactNumber user={r.assignedProvider} />
                   </>
                 ) : (
                   "—"
@@ -151,7 +150,7 @@ export default async function AdminRequestPage({ params }: { params: Promise<{ l
               {r.offers.map((o) => (
                 <li key={o.id} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 p-3">
                   <span>
-                    <span className="font-bold">{o.provider.name}</span> {phone(o.provider.phone)}
+                    <span className="font-bold">{o.provider.name}</span> <ContactNumber user={o.provider} />
                     <span className="block text-xs text-gray-500">
                       {t("offer.callout")} <Money amount={o.calloutFeeSyp} /> · {t("offer.labor")} <Money amount={o.laborSyp} /> · {t("offer.parts")}{" "}
                       <Money amount={o.partsSyp} /> · {t("offer.minutes", { count: o.etaMinutes })}
@@ -199,7 +198,7 @@ export default async function AdminRequestPage({ params }: { params: Promise<{ l
               candidates.map((c) => (
                 <div key={c.userId} className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-gray-200 p-3 text-sm">
                   <span>
-                    <span className="font-bold">{c.user.name}</span> {phone(c.user.phone)}
+                    <span className="font-bold">{c.user.name}</span> <ContactNumber user={c.user} />
                     <span className="block text-xs text-gray-500">
                       {c.distanceKm !== null ? t("provider.distance", { km: c.distanceKm }) : t("admin.noBase")}
                       {" · "}

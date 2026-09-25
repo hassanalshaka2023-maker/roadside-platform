@@ -4,6 +4,7 @@ import { Notice } from "@/components/ui/States";
 import { RequestWizard, type WizardService } from "@/features/requests/components/RequestWizard";
 import { isIdRequiredFor } from "@/features/requests/service";
 import { readSetting } from "@/features/settings/platform";
+import { loginChannels } from "@/lib/auth/channels";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { prisma } from "@/lib/db";
 import { env } from "@/lib/env";
@@ -79,6 +80,8 @@ export default async function RequestPage({
           services={services}
           signedIn={Boolean(user)}
           idRequired={user ? await isIdRequiredFor(user.id, idMode) : false}
+          channels={loginChannels()}
+          needsContactPhone={Boolean(user && !user.phone && !user.contactPhone)}
           preselectedServiceId={preselected}
           map={{
             tileUrl: env.MAP_TILE_URL,

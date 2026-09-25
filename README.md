@@ -107,7 +107,13 @@ Both live in your `.env` and are deliberately **not** written down here — this
 file is committed, `.env` is not. Change them before any real deployment; the
 seed is idempotent, so re-running it applies the new password.
 
-### Customer login (OTP)
+### Customer login (OTP by phone or email)
+
+Until an SMS gateway is connected, people can also sign in with a code sent by
+email. With `EMAIL_PROVIDER=console` the code prints in the dev terminal like
+the SMS code; set `EMAIL_PROVIDER=smtp` and the `SMTP_*` variables (see
+`.env.example` for Gmail and Brevo) to send real emails. In production
+without SMS, set `SMS_PROVIDER=stub` and the phone option disappears.
 
 Go to **`/ar/login`** and enter any valid Syrian mobile number
 (`09XXXXXXXX`). With `SMS_PROVIDER=console` the code is printed to the

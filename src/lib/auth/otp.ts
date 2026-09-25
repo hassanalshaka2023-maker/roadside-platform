@@ -9,7 +9,11 @@
  *   - comparison is constant time
  *   - a code can be consumed exactly once
  *
- * The SMS text itself is not built here: the caller passes a renderer, so
+ * A destination is either an E.164 phone number (sent by SMS) or a lowercased
+ * email address (sent by email, while no SMS gateway exists). Both follow the
+ * same rules and limits.
+ *
+ * The message text itself is not built here: the caller passes a renderer, so
  * every user-facing string stays in messages/*.json and this module stays
  * free of i18n coupling and easy to test.
  */
@@ -19,6 +23,8 @@ import { hmacOtp, hashIp, randomNumericCode, safeEqual } from "../crypto";
 import { prisma } from "../db";
 import { env } from "../env";
 import { loggerFor } from "../logger";
+import { isEmailDestination, maskEmail } from "../email-address";
+import { emailProvider } from "../email";
 import { maskPhone } from "../phone";
 import { consumeLimit, RATE_LIMITS } from "../rate-limit";
 import { smsProvider } from "../sms";
@@ -50,6 +56,13 @@ export type OtpVerifyResult =
 
 export interface OtpContext {
   ip?: string | null;
+  /** Subject line when the destination is an email address. */
+  emailSubject?: string;
+}
+
+/** Masked for logs: never a full phone number or address. */
+function maskDestination(destination: string): string {
+  return isEmailDestination(destination) ? maskEmail(destination) : maskPhone(destination);
 }
 
 /** Seconds until `date`, never negative. */
@@ -69,7 +82,7 @@ export async function requestOtp(
   renderMessage: (code: string) => string,
   context: OtpContext = {},
 ): Promise<OtpRequestResult> {
-  const phoneMasked = maskPhone(phone);
+  const phoneMasked = maskDestination(phone);
 
   // 1. Resend cooldown, based on the most recent code for this phone.
   const latest = await prisma.otpCode.findFirst({
@@ -137,7 +150,16 @@ export async function requestOtp(
 
   // 4. Deliver. Note that `code` is never passed to the logger.
   try {
-    await smsProvider.send({ to: phone, body: renderMessage(code) });
+    if (isEmailDestination(phone)) {
+      if (!emailProvider) throw new Error("email sign-in is disabled");
+      await emailProvider.send({
+        to: phone,
+        subject: context.emailSubject ?? "",
+        text: renderMessage(code),
+      });
+    } else {
+      await smsProvider.send({ to: phone, body: renderMessage(code) });
+    }
   } catch (error) {
     log.error({ phoneMasked, err: error }, "otp sms send failed");
     return { ok: false, reason: "SEND_FAILED", retryAfterSeconds: 0 };
@@ -165,7 +187,7 @@ export async function verifyOtp(
   context: OtpContext = {},
 ): Promise<OtpVerifyResult> {
   void context;
-  const phoneMasked = maskPhone(phone);
+  const phoneMasked = maskDestination(phone);
 
   const attemptLimit = await consumeLimit("otpVerifyPerPhone", phone);
   if (!attemptLimit.allowed) {

@@ -4,6 +4,8 @@ import { refresh } from "next/cache";
 import { z } from "zod";
 
 import { formString, runAction, type ActionResult } from "@/lib/action-result";
+import { normalizeSyrianPhone } from "@/lib/phone";
+import { setContactPhone } from "@/features/providers/service";
 import { DomainError } from "@/features/requests/errors";
 import { applicationInputSchema, DECISIONS } from "./schemas";
 import { decideApplication, saveApplication } from "./service";
@@ -16,7 +18,15 @@ export async function saveApplicationAction(
   return runAction(
     "applyAsProvider",
     async ({ user, ip }) => {
-      if (!user.phone) throw new DomainError("PROVIDER_ROLE_CONFLICT");
+      // The number the platform and customers reach the provider on: the
+      // verified phone, or (email accounts) a contact number given here.
+      let phone = user.phone ?? user.contactPhone;
+      if (!phone) {
+        const normalized = normalizeSyrianPhone(formString(formData, "contactPhone"));
+        if (!normalized.ok) throw new DomainError("CONTACT_PHONE_REQUIRED");
+        phone = normalized.phone;
+        await setContactPhone(user.id, phone);
+      }
       let payload: unknown;
       try {
         payload = JSON.parse(formString(formData, "payload") || "{}");
@@ -25,7 +35,7 @@ export async function saveApplicationAction(
       }
       const input = applicationInputSchema.parse(payload);
       const submit = formString(formData, "intent") === "submit";
-      const saved = await saveApplication({ userId: user.id, phone: user.phone, input, submit, ip });
+      const saved = await saveApplication({ userId: user.id, phone, input, submit, ip });
       refresh();
       return { status: saved.status };
     },

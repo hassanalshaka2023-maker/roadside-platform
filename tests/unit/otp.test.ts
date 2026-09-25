@@ -97,6 +97,16 @@ vi.mock("@/lib/sms", () => ({
   },
 }));
 
+const sentEmails: Array<{ to: string; subject: string; text: string }> = [];
+vi.mock("@/lib/email", () => ({
+  emailProvider: {
+    name: "test",
+    send: async (message: { to: string; subject: string; text: string }) => {
+      sentEmails.push(message);
+    },
+  },
+}));
+
 const { requestOtp, verifyOtp } = await import("@/lib/auth/otp");
 const { rateLimiter } = await import("@/lib/rate-limit");
 const { MemoryRateLimiter } = await import("@/lib/rate-limit/memory");
@@ -121,6 +131,7 @@ beforeEach(() => {
 
   rows.length = 0;
   sentMessages.length = 0;
+  sentEmails.length = 0;
   seq = 0;
   lastCode = "";
 
@@ -311,5 +322,31 @@ describe("verifyOtp", () => {
     expect(blocked.ok).toBe(false);
     if (blocked.ok) return;
     expect(blocked.reason).toBe("RATE_LIMITED");
+  });
+});
+
+describe("email destinations", () => {
+  const EMAIL = "ahmad@example.com";
+
+  it("sends the code by email with its subject, never by SMS", async () => {
+    const result = await requestOtp(EMAIL, "LOGIN", render, { ip: "203.0.113.5", emailSubject: "Your code" });
+    expect(result.ok).toBe(true);
+    expect(sentMessages).toHaveLength(0);
+    expect(sentEmails).toHaveLength(1);
+    expect(sentEmails[0]).toMatchObject({ to: EMAIL, subject: "Your code" });
+    expect(sentEmails[0].text).toContain(lastCode);
+  });
+
+  it("verifies an emailed code once, like a phone code", async () => {
+    await requestOtp(EMAIL, "LOGIN", render, { emailSubject: "s" });
+    const code = lastCode;
+    expect(await verifyOtp(EMAIL, code, "LOGIN")).toEqual({ ok: true });
+    expect((await verifyOtp(EMAIL, code, "LOGIN")).ok).toBe(false);
+  });
+
+  it("keeps the resend cooldown per address", async () => {
+    await requestOtp(EMAIL, "LOGIN", render, { emailSubject: "s" });
+    const again = await requestOtp(EMAIL, "LOGIN", render, { emailSubject: "s" });
+    expect(again).toMatchObject({ ok: false, reason: "COOLDOWN" });
   });
 });

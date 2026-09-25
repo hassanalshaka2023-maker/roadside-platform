@@ -12,7 +12,7 @@ import { ALL_STATUSES, type RequestStatusName } from "@/features/requests/state-
 import { Link } from "@/i18n/navigation";
 import { requirePermission } from "@/lib/auth/current-user";
 import { governorateName } from "@/lib/geo";
-import { toLocalFormat } from "@/lib/phone";
+import { ContactNumber } from "@/components/ui/ContactNumber";
 
 export default async function AdminRequestsPage({
   params,
@@ -68,7 +68,7 @@ export default async function AdminRequestsPage({
                       </span>
                       <span className="block text-xs text-gray-500">
                         {governorateName(r.governorate, locale)} · {format.dateTime(r.createdAt, { dateStyle: "short", timeStyle: "short" })} ·{" "}
-                        {r.customer.name ?? ""} <bdi dir="ltr" className="numeric">{r.customer.phone ? toLocalFormat(r.customer.phone) : ""}</bdi>
+                        {r.customer.name ?? ""} <ContactNumber user={r.customer} fallback="" />
                         {r.assignedProvider ? ` → ${r.assignedProvider.name ?? ""}` : ""}
                         {r._count.offers > 0 ? ` · ${t("provider.offersCount", { count: r._count.offers })}` : ""}
                       </span>

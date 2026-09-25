@@ -10,7 +10,6 @@ import { Textarea } from "@/components/ui/Textarea";
 import { Select } from "@/components/ui/Select";
 import { Input } from "@/components/ui/Input";
 import { governorateName } from "@/lib/geo";
-import { toLocalFormat } from "@/lib/phone";
 import { COMPLAINT_CATEGORIES } from "@/features/feedback/service";
 import type { OfferForCustomer } from "@/features/offers/service";
 import {
@@ -34,6 +33,7 @@ import {
   SEARCH_ENDED_STATUSES,
   type RequestStatusName,
 } from "../state-machine";
+import { ContactNumber, contactNumberOf } from "@/components/ui/ContactNumber";
 
 type Extra = {
   id: string;
@@ -247,14 +247,14 @@ export async function TrackingView({
                 {t("tracking.ratingCount", { count: request.assignedProvider.providerProfile.ratingCount })}
               </p>
             ) : null}
-            {isOwner && isActiveJob(status) && request.assignedProvider.phone ? (
+            {isOwner && isActiveJob(status) && contactNumberOf(request.assignedProvider) ? (
               <a
-                href={`tel:${request.assignedProvider.phone}`}
+                href={`tel:${contactNumberOf(request.assignedProvider)!.number}`}
                 className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-lg bg-brand-red px-5 text-lg font-extrabold text-white hover:bg-brand-red-dark"
               >
                 <Phone aria-hidden="true" className="h-5 w-5" />
                 {t("tracking.callProvider")}{" "}
-                <bdi dir="ltr" className="numeric">{toLocalFormat(request.assignedProvider.phone)}</bdi>
+                <ContactNumber user={request.assignedProvider} />
               </a>
             ) : null}
 

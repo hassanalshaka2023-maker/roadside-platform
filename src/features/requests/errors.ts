@@ -10,6 +10,7 @@
 export type DomainErrorCode =
   | "NOT_FOUND"
   | "RATE_LIMITED"
+  | "CONTACT_PHONE_REQUIRED"
   | "CONCURRENT_UPDATE"
   | "ILLEGAL_TRANSITION"
   | "ID_REQUIRED"

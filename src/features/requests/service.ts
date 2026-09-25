@@ -106,6 +106,7 @@ export const customerRequestSelect = {
     select: {
       name: true,
       phone: true,
+      contactPhone: true,
       providerProfile: {
         select: { ratingAverage: true, ratingCount: true, workshopName: true },
       },

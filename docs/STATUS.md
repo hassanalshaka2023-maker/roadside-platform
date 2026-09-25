@@ -1,6 +1,6 @@
 # Project status
 
-Last updated: 2026-09-25. Keep this file current: it is how work resumes
+Last updated: 2026-09-26. Keep this file current: it is how work resumes
 without losing context.
 
 ## Decisions in force (2026-09-25)
@@ -15,6 +15,19 @@ without losing context.
   providers `commissionNoticeDays` (default 14) in advance and applies only to
   requests accepted after the effective date.
 - Money is stored as **integer Syrian pounds**.
+
+## Email sign-in (added 2026-09-26)
+
+While no SMS gateway exists, customers and providers can sign in with a code
+sent by **email** (login page, request form, provider application). Same code
+rules and rate limits as SMS. The account is keyed by the email; the phone
+number they give is stored as `contactPhone`, shown to the booked provider
+and admins **marked unverified**, and never used to find an account.
+Staff emails get no code (and the screen does not reveal it).
+Config: `EMAIL_PROVIDER=console|smtp|disabled` + `SMTP_*`. Phone sign-in is
+hidden when `SMS_PROVIDER=stub`. Real SMTP delivery has not been tested yet
+(needs your SMTP account). Accounts are not linked: signing in by email and
+later by phone creates two accounts.
 
 ## Done and verified locally
 
@@ -34,12 +47,12 @@ without losing context.
 
 ## Tests
 
-- `npm test` - 222 unit tests (state machine, money, permissions, files, messages...).
+- `npm test` - 229 unit tests (state machine, money, permissions, files, messages...).
 - `npm run test:integration` - 26 tests on a real `*_test` Postgres database:
   approval gate, concurrent double booking, provider double booking,
   idempotent create, frozen price, extras, completion, commission snapshot and
   notice, disputes, ratings, towing fallback, access between users.
-- Browser walk-through (Chrome, 390px and 1366px): 40 steps passed, including
+- Browser walk-through (Chrome, 390px and 1366px): 43 steps passed (incl. email sign-in), including
   denied geolocation, draft after reload, full job lifecycle, towing fallback,
   offline banner, application → approval, dispatcher 404s and ID 403.
   The script lives outside the repo (it used a scratch `playwright-core`);
@@ -48,7 +61,7 @@ without losing context.
 ## Blockers for a real launch
 
 1. **SMS gateway.** Only the `console` driver works; production has a stub
-   that throws. Candidates found (not tested, need an account and a
+   that throws. Email sign-in now covers the gap once SMTP is configured. Candidates found (not tested, need an account and a
    compliance check with SYTRA): EasySendSMS, BudgetSMS, D7 Networks,
    SMS.to, Messaggio. Implement `SmsProvider` in `src/lib/sms/` once one is
    chosen and tested with real Syriatel and MTN numbers.

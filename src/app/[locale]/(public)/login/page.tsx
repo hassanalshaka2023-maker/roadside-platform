@@ -2,7 +2,9 @@ import { redirect } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { Card, CardBody } from "@/components/ui/Card";
-import { CustomerLoginForm } from "@/features/auth/components/CustomerLoginForm";
+import { requestOtpAction, verifyOtpAction } from "@/features/auth/actions";
+import { CodeSignInForm } from "@/features/auth/components/CodeSignInForm";
+import { loginChannels } from "@/lib/auth/channels";
 import { safeNextPath } from "@/features/auth/next-path";
 import { getCurrentUser } from "@/lib/auth/current-user";
 
@@ -29,7 +31,12 @@ export default async function LoginPage({
         <CardBody className="p-6 sm:p-8">
           <h1 className="text-2xl">{t("loginTitle")}</h1>
           <p className="mb-6 mt-2 text-sm text-gray-600">{t("loginSubtitle")}</p>
-          <CustomerLoginForm next={next} />
+          <CodeSignInForm
+            channels={loginChannels()}
+            sendAction={requestOtpAction}
+            verifyAction={verifyOtpAction}
+            hidden={next ? { next } : {}}
+          />
         </CardBody>
       </Card>
     </div>

@@ -15,7 +15,7 @@ import { can } from "@/lib/auth/permissions";
 import { prisma } from "@/lib/db";
 import { governorateName } from "@/lib/geo";
 import { bpsToPercent } from "@/lib/money";
-import { toLocalFormat } from "@/lib/phone";
+import { ContactNumber } from "@/components/ui/ContactNumber";
 
 export default async function AdminProviderPage({ params }: { params: Promise<{ locale: string; userId: string }> }) {
   const { locale, userId } = await params;
@@ -42,7 +42,7 @@ export default async function AdminProviderPage({ params }: { params: Promise<{ 
         <CardBody>
           <dl className="text-sm">
             <Field label={t("account.phone")}>
-              <bdi dir="ltr" className="numeric">{profile.user.phone ? toLocalFormat(profile.user.phone) : "—"}</bdi>
+              <ContactNumber user={profile.user} />
             </Field>
             <Field label={t("apply.governorate")}>{governorateName(profile.governorate, locale) || "—"}</Field>
             <Field label={t("provider.profile.radius")}>{profile.serviceRadiusKm} km</Field>

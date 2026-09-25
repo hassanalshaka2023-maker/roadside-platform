@@ -2,7 +2,6 @@
 
 import { refresh } from "next/cache";
 import { redirect } from "next/navigation";
-import { getTranslations } from "next-intl/server";
 import { z } from "zod";
 
 import {
@@ -14,11 +13,7 @@ import {
 } from "@/lib/action-result";
 import { assertSameOrigin } from "@/lib/auth/csrf";
 import { deterministicUuid } from "@/lib/crypto";
-import { requestOtp, verifyOtp } from "@/lib/auth/otp";
-import { createSession } from "@/lib/auth/session";
-import { prisma } from "@/lib/db";
-import { env } from "@/lib/env";
-import { loggerFor } from "@/lib/logger";
+import { completeSignIn, parseChannel, sendSignInCode, type CodeFlowState } from "@/lib/auth/code-sign-in";
 import { normalizeSyrianPhone } from "@/lib/phone";
 import { consumeLimit } from "@/lib/rate-limit";
 import { getRequestContext } from "@/lib/request-context";
@@ -31,6 +26,7 @@ import {
 } from "@/features/jobs/service";
 import { acceptOfferSchema } from "@/features/offers/schemas";
 import { acceptOffer } from "@/features/offers/service";
+import { setContactPhone } from "@/features/providers/service";
 import { DomainError } from "./errors";
 import { createRequestInputSchema, destinationSchema } from "./schemas";
 import {
@@ -41,17 +37,13 @@ import {
   restartSearch,
 } from "./service";
 
-const log = loggerFor("requests/actions");
-
-export interface RequestFlowState extends ActionResult<{ trackingToken: string }> {
-  phone?: string;
-  resendAfterSeconds?: number;
-  /** After phone verification: must this customer attach an ID? */
+export interface RequestFlowState extends ActionResult<{ trackingToken: string }>, CodeFlowState {
+  /** After verification: must this customer attach an ID? */
   idRequired?: boolean;
 }
 
 // ---------------------------------------------------------------------------
-// Submitting a request (with OTP for guests)
+// Signing in inside the request form (phone or email)
 // ---------------------------------------------------------------------------
 
 /**
@@ -67,37 +59,20 @@ export async function requestFlowOtpAction(
   } catch (error) {
     return toErrorResult(error);
   }
-
-  const normalized = normalizeSyrianPhone(formString(formData, "phone"));
-  if (!normalized.ok) return { ok: false, errorKey: `phoneErrors.${normalized.code}` };
-
-  const locale = formString(formData, "locale") || "ar";
   const context = await getRequestContext();
-  const t = await getTranslations({ locale, namespace: "otpSms" });
-
-  const result = await requestOtp(
-    normalized.phone,
-    "REQUEST",
-    (code) => t("loginBody", { code, minutes: Math.round(env.OTP_TTL_SECONDS / 60) }),
-    { ip: context.ip },
-  );
-
-  if (!result.ok) {
-    return {
-      ok: false,
-      phone: normalized.phone,
-      errorKey: `otpErrors.${result.reason}`,
-      errorValues: { seconds: result.retryAfterSeconds ?? 0 },
-    };
-  }
-
-  return { ok: true, phone: normalized.phone, resendAfterSeconds: result.resendAfterSeconds };
+  return sendSignInCode({
+    channel: parseChannel(formData.get("channel")),
+    raw: formString(formData, "destination"),
+    purpose: "REQUEST",
+    locale: formString(formData, "locale") || "ar",
+    ip: context.ip,
+  });
 }
 
 /**
- * Step 4 for a guest: verify the code, find or create the account, open a
- * session. After this the browser can upload photos (uploads need a
- * session) and submit. Admin accounts cannot place requests.
+ * Verifies the code, finds or creates the account and opens a session, so
+ * the browser can upload photos and submit. With email, a contact phone is
+ * required (the provider needs to call) and stored as unverified.
  */
 export async function verifyRequestPhoneAction(
   _prev: RequestFlowState,
@@ -109,39 +84,30 @@ export async function verifyRequestPhoneAction(
     return toErrorResult(error);
   }
 
+  const channel = parseChannel(formData.get("channel"));
+  let contactPhone: string | undefined;
+  if (channel === "email") {
+    const normalized = normalizeSyrianPhone(formString(formData, "contactPhone"));
+    if (!normalized.ok) {
+      return { ok: false, channel, destination: formString(formData, "destination"), errorKey: `phoneErrors.${normalized.code}` };
+    }
+    contactPhone = normalized.phone;
+  }
+
   const context = await getRequestContext();
-  const normalized = normalizeSyrianPhone(formString(formData, "phone"));
-  if (!normalized.ok) return { ok: false, errorKey: `phoneErrors.${normalized.code}` };
-
-  const verification = await verifyOtp(normalized.phone, formString(formData, "code").trim(), "REQUEST", {
+  const result = await completeSignIn({
+    channel,
+    destination: formString(formData, "destination"),
+    code: formString(formData, "code"),
+    purpose: "REQUEST",
     ip: context.ip,
+    userAgent: context.userAgent,
+    contactPhone,
   });
-  if (!verification.ok) {
-    return {
-      ok: false,
-      phone: normalized.phone,
-      errorKey: `otpErrors.${verification.reason}`,
-      errorValues:
-        verification.attemptsLeft !== undefined ? { count: verification.attemptsLeft } : undefined,
-    };
-  }
+  if (!result.ok) return result.state;
 
-  const user = await prisma.user.upsert({
-    where: { phone: normalized.phone },
-    create: { phone: normalized.phone, role: "CUSTOMER", isPhoneVerified: true, lastLoginAt: new Date() },
-    update: { isPhoneVerified: true, lastLoginAt: new Date() },
-    select: { id: true, role: true, status: true },
-  });
-
-  if (user.status !== "ACTIVE" || user.role === "ADMIN") {
-    log.warn({ userId: user.id }, "request blocked: account not usable");
-    // Same message as a wrong code: nothing about the account leaks.
-    return { ok: false, phone: normalized.phone, errorKey: "otpErrors.INVALID_CODE" };
-  }
-
-  await createSession(user.id, false, { ip: context.ip, userAgent: context.userAgent });
-  const idRequired = await isIdRequiredFor(user.id, await readSetting("customerIdMode"));
-  return { ok: true, phone: normalized.phone, idRequired };
+  const idRequired = await isIdRequiredFor(result.userId, await readSetting("customerIdMode"));
+  return { ok: true, channel, idRequired };
 }
 
 /**
@@ -165,6 +131,13 @@ export async function submitRequestAction(
         payload = {};
       }
       const input = createRequestInputSchema.parse(payload);
+
+      // An email account with no number yet: a provider has to be able to call.
+      if (!user.phone && !user.contactPhone) {
+        const normalized = normalizeSyrianPhone(formString(formData, "contactPhone"));
+        if (!normalized.ok) throw new DomainError("CONTACT_PHONE_REQUIRED");
+        await setContactPhone(user.id, normalized.phone);
+      }
 
       const limit = await consumeLimit("requestCreatePerUser", user.id);
       if (!limit.allowed) throw new DomainError("RATE_LIMITED");
