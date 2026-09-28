@@ -1,5 +1,7 @@
 # نجدة الطريق 24 — Najdat Al-Tariq 24
 
+[![CI](https://github.com/hassanalshaka2023-maker/roadside-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/hassanalshaka2023-maker/roadside-platform/actions/workflows/ci.yml)
+
 Roadside assistance platform for Syria. Customers request help (towing,
 battery, tyres, fuel, lockout, on-site mechanic, pre-purchase inspection).
 Approved providers nearby send priced offers, the customer accepts one, and
