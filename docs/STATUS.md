@@ -69,7 +69,19 @@ later by phone creates two accounts.
    production traffic. Choose a keyed provider or self-host a Syria extract
    and set `MAP_TILE_URL`.
 3. **Legal review** of `/terms` and `/privacy` (drafts that describe actual behaviour).
-4. **Hosting**: Vercel steps in docs/DEPLOY-VERCEL.md (S3 driver verified against Supabase Storage on 2026-09-28 with `npm run storage:check`). Docker files untested on a real server.
+4. **Hosting plan limits (measured 2026-09-29).** Live on Vercel Hobby + Prisma
+   Postgres Free. Functions now run in fra1 next to the database (query
+   latency 92 ms -> 3 ms). Two blockers for a real launch:
+   - Vercel Hobby is for non-commercial use only; a marketplace needs Pro
+     (or a VPS with the Docker files).
+   - Prisma Postgres Free includes 200k operations/month. An available
+     provider's dashboard refreshes every 30 s (~10 queries each), so a single
+     provider online 8 h/day uses roughly 300k/month. Before launch: a paid
+     database or a VPS, and a lighter "anything new?" check instead of full
+     page refreshes (or push notifications).
+   The code itself scales well past 1000 providers: the provider feed is one
+   indexed bounding-box query capped at 50 rows.
+5. **Hosting**: Vercel steps in docs/DEPLOY-VERCEL.md (S3 driver verified against Supabase Storage on 2026-09-28 with `npm run storage:check`). Docker files untested on a real server.
 
 ## Not done yet (in priority order)
 
