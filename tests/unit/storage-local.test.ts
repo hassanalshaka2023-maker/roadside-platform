@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 
 import {
   assertUploadsDirIsSafe,
@@ -16,12 +16,14 @@ import {
   StorageObjectNotFoundError,
 } from "@/lib/storage/types";
 
-const PROJECT_ROOT = "C:\\projects\\roadside-platform";
+// Absolute on every OS (C:\... on Windows, /tmp/... on the Linux CI runner).
+const BASE = resolve(tmpdir(), "najdat-path-tests");
+const PROJECT_ROOT = join(BASE, "projects", "roadside-platform");
 
 describe("assertUploadsDirIsSafe", () => {
   it("accepts a directory outside the project", () => {
     expect(() =>
-      assertUploadsDirIsSafe("C:\\roadside-data\\uploads", PROJECT_ROOT),
+      assertUploadsDirIsSafe(join(BASE, "roadside-data", "uploads"), PROJECT_ROOT),
     ).not.toThrow();
   });
 
@@ -47,7 +49,7 @@ describe("assertUploadsDirIsSafe", () => {
 
   it("refuses anything with a public segment, even outside the project", () => {
     expect(() =>
-      assertUploadsDirIsSafe("C:\\www\\public\\uploads", PROJECT_ROOT),
+      assertUploadsDirIsSafe(join(BASE, "www", "public", "uploads"), PROJECT_ROOT),
     ).toThrow(/public/);
   });
 
