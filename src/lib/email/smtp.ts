@@ -12,6 +12,7 @@ import nodemailer, { type Transporter } from "nodemailer";
 import { env } from "../env";
 import { maskEmail } from "../email-address";
 import { loggerFor } from "../logger";
+import { smtpHostOptions } from "./resolve-host";
 import type { EmailMessage, EmailProvider } from "./types";
 
 const log = loggerFor("email/smtp");
@@ -20,9 +21,9 @@ export class SmtpEmailProvider implements EmailProvider {
   readonly name = "smtp";
   private transporter: Transporter | null = null;
 
-  private transport(): Transporter {
+  private async transport(): Promise<Transporter> {
     this.transporter ??= nodemailer.createTransport({
-      host: env.SMTP_HOST,
+      ...(await smtpHostOptions(env.SMTP_HOST!)),
       port: env.SMTP_PORT,
       secure: env.SMTP_SECURE,
       auth: { user: env.SMTP_USER, pass: env.SMTP_PASS },
@@ -36,7 +37,7 @@ export class SmtpEmailProvider implements EmailProvider {
 
   async send(message: EmailMessage): Promise<void> {
     try {
-      await this.transport().sendMail({
+      await (await this.transport()).sendMail({
         from: env.EMAIL_FROM,
         to: message.to,
         subject: message.subject,

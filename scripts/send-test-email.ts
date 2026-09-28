@@ -6,6 +6,8 @@
  */
 import nodemailer from "nodemailer";
 
+import { smtpHostOptions } from "../src/lib/email/resolve-host";
+
 try {
   process.loadEnvFile();
 } catch {
@@ -21,7 +23,7 @@ async function main() {
   }
 
   const transport = nodemailer.createTransport({
-    host: SMTP_HOST,
+    ...(await smtpHostOptions(SMTP_HOST)),
     port: Number(SMTP_PORT ?? 587),
     secure: SMTP_SECURE === "true",
     auth: { user: SMTP_USER, pass: SMTP_PASS },
