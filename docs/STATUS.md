@@ -69,7 +69,7 @@ later by phone creates two accounts.
    production traffic. Choose a keyed provider or self-host a Syria extract
    and set `MAP_TILE_URL`.
 3. **Legal review** of `/terms` and `/privacy` (drafts that describe actual behaviour).
-4. **Hosting**: Vercel steps in docs/DEPLOY-VERCEL.md (needs GitHub, Vercel, Neon and an S3-compatible bucket; the S3 driver has not run against a real bucket yet). Docker files untested on a real server.
+4. **Hosting**: Vercel steps in docs/DEPLOY-VERCEL.md (S3 driver verified against Supabase Storage on 2026-09-28 with `npm run storage:check`). Docker files untested on a real server.
 
 ## Not done yet (in priority order)
 

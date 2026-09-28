@@ -25,7 +25,8 @@
     "postinstall": "prisma generate",
     "vercel-build": "prisma migrate deploy && next build",
     "email:test": "tsx scripts/send-test-email.ts",
-    "storage:check": "tsx --conditions=react-server --env-file=.env scripts/check-storage.ts"
+    "storage:check": "tsx --conditions=react-server --env-file=.env scripts/check-storage.ts",
+    "db:seed:prod": "tsx --env-file=.env.production.local prisma/seed.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
