@@ -38,10 +38,13 @@ export function LanguageSwitcher({
             aria-current={isActive ? "true" : undefined}
             className={cn(
               "inline-flex min-h-touch items-center rounded-lg px-3 text-sm font-bold transition-colors",
+              // Quiet on purpose: yellow is kept for the one main action.
               isActive
-                ? "bg-brand-yellow text-ink"
+                ? onDark
+                  ? "bg-white/15 text-white"
+                  : "bg-gray-100 text-ink"
                 : onDark
-                  ? "text-white hover:bg-white/10"
+                  ? "text-gray-400 hover:bg-white/10 hover:text-white"
                   : "text-gray-600 hover:bg-gray-100",
             )}
           >

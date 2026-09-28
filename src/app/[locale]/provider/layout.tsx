@@ -4,6 +4,7 @@ import { LanguageSwitcher } from "@/components/layout/LanguageSwitcher";
 import { Logo } from "@/components/ui/Logo";
 import { LogoutButton } from "@/features/auth/components/LogoutButton";
 import { Link } from "@/i18n/navigation";
+import { ProviderTabs } from "@/components/layout/ProviderTabs";
 import { requireRole } from "@/lib/auth/current-user";
 
 /**
@@ -41,20 +42,10 @@ export default async function ProviderLayout({
           </Link>
           <div className="flex items-center gap-2">
             <LanguageSwitcher onDark />
-            <LogoutButton variant="ghost" className="text-white hover:bg-white/10" />
+            <LogoutButton compact variant="ghost" className="text-white hover:bg-white/10" />
           </div>
         </div>
-        <nav aria-label={t("title")} className="flex gap-1 overflow-x-auto px-3 pb-2">
-          {nav.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className="inline-flex min-h-touch shrink-0 items-center rounded-lg px-3 text-sm font-bold text-gray-200 hover:bg-white/10"
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
+        <ProviderTabs label={t("title")} items={nav} />
       </header>
       <div className="hazard-divider" />
 

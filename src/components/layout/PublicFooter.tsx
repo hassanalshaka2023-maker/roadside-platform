@@ -27,15 +27,15 @@ export async function PublicFooter() {
           <h2 className="mb-3 text-base font-extrabold text-brand-yellow">
             {t("home.contactTitle")}
           </h2>
-          <ul className="flex flex-col gap-2 text-sm">
+          <ul className="flex flex-wrap gap-2 text-sm">
             {valid.map((phone) => (
               <li key={phone}>
                 <a
                   href={`tel:${phone}`}
                   dir="ltr"
-                  className="numeric inline-flex min-h-touch items-center gap-2 font-bold hover:text-brand-yellow"
+                  className="numeric inline-flex min-h-touch items-center gap-2 rounded-lg bg-white/5 px-3 font-bold hover:bg-white/10 hover:text-brand-yellow"
                 >
-                  <Phone aria-hidden="true" className="h-4 w-4" />
+                  <Phone aria-hidden="true" className="h-4 w-4 text-brand-yellow" />
                   {toLocalFormat(phone)}
                 </a>
               </li>
@@ -45,7 +45,7 @@ export async function PublicFooter() {
 
         <div>
           <h2 className="mb-3 text-base font-extrabold text-brand-yellow">
-            {t("common.hoursAllDay")}
+            {t("common.workingHours")}
           </h2>
           <ul className="flex flex-col gap-2 text-sm text-gray-300">
             <li className="flex items-center gap-2">

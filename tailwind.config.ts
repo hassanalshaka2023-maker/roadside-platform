@@ -93,6 +93,11 @@ const config: Config = {
         // gradient rather than an image so it costs nothing to download.
         hazard:
           "repeating-linear-gradient(45deg, #FFD400 0, #FFD400 14px, #0B0B0F 14px, #0B0B0F 28px)",
+        // Dashed centre line of a road, under the hero. Pure CSS, no image.
+        "road-line":
+          "repeating-linear-gradient(90deg, rgba(255, 212, 0, 0.55) 0 36px, transparent 36px 72px)",
+        // Soft headlight glow behind the hero headline.
+        glow: "radial-gradient(60% 80% at 85% 0%, rgba(255, 212, 0, 0.14), transparent 70%)",
       },
     },
   },

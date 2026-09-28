@@ -29,11 +29,13 @@ export function Logo({
       <span className="inline-flex items-baseline gap-1.5">
         <span
           className={cn(
-            "text-xl font-extrabold tracking-tight sm:text-2xl",
+            "whitespace-nowrap text-xl font-extrabold tracking-tight sm:text-2xl",
             onDark ? "text-white" : "text-ink",
           )}
         >
-          {t("name")}
+          {/* The flyer's red "24", typeset - not a drawing of the logo. */}
+          {t("name").replace(/\s*24$/, "")}{" "}
+          {/24$/.test(t("name")) ? <span className="text-brand-red">24</span> : null}
         </span>
       </span>
       {showTagline ? (

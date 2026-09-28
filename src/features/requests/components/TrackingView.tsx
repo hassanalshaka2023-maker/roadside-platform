@@ -1,4 +1,20 @@
-import { CheckCircle2, Circle, Clock, Phone, Star, Truck } from "lucide-react";
+import {
+  AlertTriangle,
+  BadgeCheck,
+  CheckCircle2,
+  Circle,
+  Clock,
+  Hourglass,
+  MapPin,
+  Phone,
+  Search,
+  SearchX,
+  Star,
+  Truck,
+  Wrench,
+  XCircle,
+  type LucideIcon,
+} from "lucide-react";
 import { getFormatter, getLocale, getTranslations } from "next-intl/server";
 
 import { ActionForm, SubmitButton } from "@/components/ui/ActionForm";
@@ -34,6 +50,31 @@ import {
   type RequestStatusName,
 } from "../state-machine";
 import { ContactNumber, contactNumberOf } from "@/components/ui/ContactNumber";
+import { cn } from "@/lib/cn";
+
+/** The status card's look: one icon per stage, one colour per outcome. */
+const STATUS_LOOK: Record<RequestStatusName, { icon: LucideIcon; tone: "active" | "done" | "warn" | "ended" }> = {
+  SEARCHING: { icon: Search, tone: "active" },
+  CONFIRMED: { icon: CheckCircle2, tone: "active" },
+  ON_THE_WAY: { icon: Truck, tone: "active" },
+  ARRIVED: { icon: MapPin, tone: "active" },
+  IN_PROGRESS: { icon: Wrench, tone: "active" },
+  AWAITING_CONFIRMATION: { icon: Hourglass, tone: "active" },
+  COMPLETED: { icon: BadgeCheck, tone: "done" },
+  DISPUTED: { icon: AlertTriangle, tone: "warn" },
+  CANCELLED_BY_CUSTOMER: { icon: XCircle, tone: "ended" },
+  CANCELLED_BY_PROVIDER: { icon: XCircle, tone: "ended" },
+  CANCELLED_BY_ADMIN: { icon: XCircle, tone: "ended" },
+  NO_PROVIDER_AVAILABLE: { icon: SearchX, tone: "ended" },
+  EXPIRED: { icon: SearchX, tone: "ended" },
+};
+
+const TONES = {
+  active: { card: "border-brand-yellow bg-brand-yellow-soft", icon: "bg-ink text-brand-yellow" },
+  done: { card: "border-success/30 bg-success-soft", icon: "bg-success text-white" },
+  warn: { card: "border-warning/30 bg-warning-soft", icon: "bg-warning text-white" },
+  ended: { card: "border-gray-200 bg-gray-50", icon: "bg-gray-200 text-gray-600" },
+};
 
 type Extra = {
   id: string;
@@ -68,6 +109,9 @@ export async function TrackingView({
   const pricingNote = locale === "ar" ? request.serviceType.pricingNoteAr : request.serviceType.pricingNoteEn;
   const hidden = (name: string, value: string) => <input type="hidden" name={name} value={value} />;
   const idField = hidden("requestId", request.id);
+  const look = STATUS_LOOK[status] ?? STATUS_LOOK.SEARCHING;
+  const StatusIcon = look.icon;
+  const tone = TONES[look.tone];
 
   return (
     <div className="flex flex-col gap-5">
@@ -87,9 +131,15 @@ export async function TrackingView({
       {!isOwner ? <Notice tone="info">{t("tracking.viewerOnly")}</Notice> : null}
 
       {/* Main state card ---------------------------------------------------- */}
-      <Card>
-        <CardBody className="flex flex-col gap-3">
-          <p className="text-lg font-extrabold">{t(`tracking.headline.${status}`)}</p>
+      <section aria-live="polite" className={cn("flex gap-4 rounded-2xl border-2 p-4 sm:p-5", tone.card)}>
+        <span className={cn("relative flex h-12 w-12 shrink-0 items-center justify-center rounded-full", tone.icon)}>
+          {status === "SEARCHING" ? (
+            <span aria-hidden="true" className="absolute inset-0 animate-ping rounded-full bg-ink/20 motion-reduce:hidden" />
+          ) : null}
+          <StatusIcon aria-hidden="true" className="relative h-6 w-6" />
+        </span>
+        <div className="flex min-w-0 flex-1 flex-col gap-2">
+          <p className="text-lg font-extrabold leading-snug">{t(`tracking.headline.${status}`)}</p>
           <p className="text-gray-700">{t(`tracking.explain.${status}`)}</p>
 
           {status === "SEARCHING" && request.searchExpiresAt ? (
@@ -111,8 +161,8 @@ export async function TrackingView({
               {t("tracking.reason")}: {request.cancelledReason}
             </p>
           ) : null}
-        </CardBody>
-      </Card>
+        </div>
+      </section>
 
       {/* Offers ------------------------------------------------------------- */}
       {isOwner && status === "SEARCHING" ? (

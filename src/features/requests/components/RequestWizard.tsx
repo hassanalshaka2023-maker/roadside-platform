@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { ArrowLeft, ArrowRight, HelpCircle, MapPinOff } from "lucide-react";
+
+import { serviceIcon } from "@/features/services/icons";
 import { useLocale, useTranslations } from "next-intl";
 
 import { Button } from "@/components/ui/Button";
@@ -331,25 +333,34 @@ export function RequestWizard({
         <section className="flex flex-col gap-3">
           <h2 className="text-xl">{t("wizard.serviceTitle")}</h2>
           <div className="grid gap-3 sm:grid-cols-2" role="radiogroup" aria-label={t("wizard.serviceTitle")}>
-            {services.map((s) => (
+            {services.map((s) => {
+              const Icon = serviceIcon(s.slug);
+              const selected = draft.serviceTypeId === s.id && !(draft.problemUnknown && s.slug === MECHANIC_SLUG);
+              return (
               <button
                 key={s.id}
                 type="button"
                 role="radio"
-                aria-checked={draft.serviceTypeId === s.id && !(draft.problemUnknown && s.slug === MECHANIC_SLUG)}
+                aria-checked={selected}
                 onClick={() => {
                   update({ serviceTypeId: s.id, problemUnknown: false });
                   goTo("location");
                 }}
                 className={cn(
-                  "min-h-[64px] rounded-xl border-2 p-4 text-start transition-colors",
-                  draft.serviceTypeId === s.id ? "border-ink bg-brand-yellow-soft" : "border-gray-200 bg-white hover:border-ink",
+                  "flex min-h-[64px] items-center gap-3 rounded-xl border-2 p-3 text-start transition-colors sm:p-4",
+                  selected ? "border-ink bg-brand-yellow-soft" : "border-gray-200 bg-white hover:border-ink",
                 )}
               >
-                <span className="block font-extrabold">{s.name}</span>
-                {s.description ? <span className="mt-1 block text-sm text-gray-600">{s.description}</span> : null}
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-ink text-brand-yellow">
+                  <Icon aria-hidden="true" className="h-5 w-5" />
+                </span>
+                <span>
+                  <span className="block font-extrabold">{s.name}</span>
+                  {s.description ? <span className="mt-0.5 block text-sm leading-snug text-gray-600">{s.description}</span> : null}
+                </span>
               </button>
-            ))}
+              );
+            })}
             {services.some((s) => s.slug === MECHANIC_SLUG) ? (
               <button
                 type="button"
@@ -360,9 +371,11 @@ export function RequestWizard({
                   update({ serviceTypeId: mechanic.id, problemUnknown: true });
                   goTo("location");
                 }}
-                className="flex min-h-[64px] items-start gap-3 rounded-xl border-2 border-dashed border-gray-300 bg-white p-4 text-start hover:border-ink"
+                className="flex min-h-[64px] items-center gap-3 rounded-xl border-2 border-dashed border-gray-300 bg-white p-3 text-start hover:border-ink sm:p-4"
               >
-                <HelpCircle aria-hidden="true" className="mt-0.5 h-5 w-5 shrink-0 text-brand-red" />
+                <span className="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-brand-red-soft text-brand-red">
+                  <HelpCircle aria-hidden="true" className="h-5 w-5" />
+                </span>
                 <span>
                   <span className="block font-extrabold">{t("wizard.dontKnow")}</span>
                   <span className="mt-1 block text-sm text-gray-600">{t("wizard.dontKnowHint")}</span>
@@ -405,9 +418,9 @@ export function RequestWizard({
               checked={draft.locationApproximate}
               onChange={(e) => setApproximate(e.target.checked)}
             />
-            <span>
+            <span className="min-w-0 flex-1">
               <span className="flex items-center gap-2 font-bold">
-                <MapPinOff aria-hidden="true" className="h-4 w-4" />
+                <MapPinOff aria-hidden="true" className="h-4 w-4 shrink-0" />
                 {t("wizard.cannotUseMap")}
               </span>
               <span className="block text-sm text-gray-600">{t("wizard.cannotUseMapHint")}</span>
@@ -471,7 +484,7 @@ export function RequestWizard({
         <section className="flex flex-col gap-4">
           <h2 className="text-xl">{t("wizard.detailsTitle")}</h2>
 
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid grid-cols-2 gap-x-3 gap-y-4 sm:gap-x-4">
             <FormField htmlFor="carMake" label={t("wizard.carMake")} optionalLabel={t("common.optional")}>
               <Input id="carMake" value={draft.carMake} maxLength={60} placeholder={t("wizard.carMakePlaceholder")} onChange={(e) => update({ carMake: e.target.value })} />
             </FormField>

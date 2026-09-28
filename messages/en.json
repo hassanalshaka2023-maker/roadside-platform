@@ -33,7 +33,8 @@
     "coverage": "All of Syria, depending on providers in your area",
     "comingSoonTitle": "Under construction",
     "comingSoonText": "This screen will be built in a later phase",
-    "offline": "Connection lost. We will send what you asked for when the network is back"
+    "offline": "Connection lost. We will send what you asked for when the network is back",
+    "workingHours": "Working hours"
   },
   "nav": {
     "home": "Home",
@@ -44,7 +45,8 @@
     "logout": "Sign out",
     "adminPanel": "Admin panel",
     "providerPanel": "Provider panel",
-    "skipToContent": "Skip to content"
+    "skipToContent": "Skip to content",
+    "menu": "Menu"
   },
   "home": {
     "heroTitle": "Car broke down? Get help from where you are",
@@ -76,7 +78,21 @@
     "joinText": "Register your details. Once reviewed and approved, you start receiving nearby requests.",
     "joinFree": "Joining is free for now, with no commission on requests.",
     "contactTitle": "Contact",
-    "contactText": "Call us or message us on WhatsApp"
+    "contactText": "Call us or message us on WhatsApp",
+    "quickTitle": "What happened?",
+    "quickSubtitle": "Pick a service and start your request",
+    "callNow": "Call now",
+    "orCall": "Prefer to call?",
+    "stat247": "24/7",
+    "stat247Text": "Requests day and night",
+    "statCoverage": "All governorates",
+    "statCoverageText": "Where providers are available",
+    "statCash": "Pay cash",
+    "statCashText": "Only after the job is done",
+    "allServices": "All services",
+    "providerPerks1": "Requests near you",
+    "providerPerks2": "You set the price",
+    "providerPerks3": "No commission for now"
   },
   "auth": {
     "loginTitle": "Sign in",
@@ -338,7 +354,7 @@
   },
   "tracking": {
     "code": "Request number",
-    "viewerOnly": "You are viewing the status only. To manage the request, sign in with the phone number it was sent from.",
+    "viewerOnly": "You are viewing the status only. To manage the request, sign in with the phone or email it was sent from.",
     "headline": {
       "SEARCHING": "Finding a provider near you",
       "CONFIRMED": "Your request is confirmed",
