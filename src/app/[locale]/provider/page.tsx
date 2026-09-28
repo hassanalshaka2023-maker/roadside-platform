@@ -48,7 +48,9 @@ export default async function ProviderDashboardPage({ params }: { params: Promis
 
   return (
     <div className="flex flex-col gap-4">
-      <AutoRefresh seconds={30} />
+      {/* Poll only while something can change for this provider: an unavailable
+          provider with nothing pending costs nothing while the page is open. */}
+      {profile?.isAvailable || activeJobs.length > 0 || myOffers.length > 0 ? <AutoRefresh seconds={30} /> : null}
       <p className="text-lg font-extrabold">{t("provider.welcome", { name: user.name ?? "" })}</p>
 
       {suspended ? (

@@ -148,7 +148,7 @@ const SERVICE_TYPES = [
  */
 const SETTINGS: Array<{ key: string; value: unknown }> = [
   { key: "customerIdMode", value: "NEVER" },
-  { key: "businessPhones", value: ["0938503705", "0992605513", "0981488760"] },
+  { key: "businessPhones", value: ["0981488760"] },
   { key: "whatsappEnabled", value: true },
   { key: "searchRadiusKm", value: 30 },
   { key: "searchTimeoutMinutes", value: 20 },

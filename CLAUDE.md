@@ -84,7 +84,7 @@ No online payments, no native mobile apps, no insurance features, no live GPS tr
 - Tone of copy: warm, reassuring, simple Arabic
 
 ### Business info to show on the public site (configurable in Settings, not hardcoded)
-- WhatsApp/phone numbers: 0938503705, 0992605513, 0981488760
+- WhatsApp/phone number: 0981488760 (the only public number, also on WhatsApp; decided 2026-09-28)
 - Floating WhatsApp/call button on public pages (mobile-first)
 - Working hours: 24/7, all regions of Syria (as advertised)
 
