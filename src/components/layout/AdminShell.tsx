@@ -83,7 +83,7 @@ export function AdminShell({
             <Menu aria-hidden="true" className="h-6 w-6" />
           )}
         </button>
-        <Logo onDark />
+        <Logo size="sm" priority />
         <LanguageSwitcher onDark />
       </header>
 
@@ -96,7 +96,7 @@ export function AdminShell({
         )}
       >
         <div className="hidden p-4 lg:block">
-          <Logo onDark showTagline />
+          <Logo size="lg" />
         </div>
 
         {nav}

@@ -87,7 +87,7 @@ export default async function HomePage({ params }: { params: Promise<{ locale: s
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-brand-red opacity-75 motion-reduce:hidden" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-brand-red" />
               </span>
-              {t("brand.tagline")}
+              {t("common.hoursAllDay")}
             </p>
             <h1 className="mt-5 text-[2rem] leading-[1.25] sm:text-5xl sm:leading-[1.2]">{t("home.heroTitle")}</h1>
             <p className="mt-4 max-w-xl text-base leading-relaxed text-gray-300 sm:text-lg">{t("home.heroSubtitle")}</p>

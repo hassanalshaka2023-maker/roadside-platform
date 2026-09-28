@@ -27,7 +27,7 @@ export default async function AdminLoginPage({
   return (
     <div className="dark-surface flex min-h-dvh flex-col items-center justify-center bg-ink p-4">
       <div className="mb-6">
-        <Logo onDark showTagline />
+        <Logo size="xl" priority />
       </div>
 
       <Card className="w-full max-w-md">

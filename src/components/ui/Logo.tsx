@@ -3,51 +3,48 @@ import { useTranslations } from "next-intl";
 import { cn } from "@/lib/cn";
 
 /**
- * Brand mark.
+ * Brand mark: the real logo artwork (design/logo.png), served as small WebP
+ * files from public/brand/. Never redraw or approximate it in code.
  *
- * IMPORTANT: the real logo (gear + wrench over a road, with the bold "24" and
- * the red clock arrow) must NEVER be redrawn or approximated in code. Until
- * the artwork lands in public/brand/, this renders a typographic placeholder.
- *
- * When the files arrive, swap the inner markup for an <Image> and keep this
- * component's API unchanged, so no call site has to be touched.
+ * The artwork sits on black, so on the dark surfaces it is used on,
+ * `mix-blend-lighten` lets that black melt into the ink background instead
+ * of showing as a box. The tagline is part of the artwork.
  */
+const SIZES = {
+  sm: { className: "h-12", sizes: "72px" },
+  md: { className: "h-14 sm:h-[4.5rem]", sizes: "(min-width: 640px) 108px, 84px" },
+  lg: { className: "h-24", sizes: "144px" },
+  xl: { className: "h-32", sizes: "192px" },
+} as const;
+
 export function Logo({
   className,
-  onDark = false,
-  showTagline = false,
+  size = "md",
+  priority = false,
 }: {
   className?: string;
-  /** Use on the dark header/footer surfaces. */
-  onDark?: boolean;
-  showTagline?: boolean;
+  size?: keyof typeof SIZES;
+  /** Above the fold: load eagerly. */
+  priority?: boolean;
 }) {
   const t = useTranslations("brand");
+  const variant = SIZES[size];
 
   return (
-    <span className={cn("inline-flex flex-col leading-none", className)}>
-      <span className="inline-flex items-baseline gap-1.5">
-        <span
-          className={cn(
-            "whitespace-nowrap text-xl font-extrabold tracking-tight sm:text-2xl",
-            onDark ? "text-white" : "text-ink",
-          )}
-        >
-          {/* The flyer's red "24", typeset - not a drawing of the logo. */}
-          {t("name").replace(/\s*24$/, "")}{" "}
-          {/24$/.test(t("name")) ? <span className="text-brand-red">24</span> : null}
-        </span>
-      </span>
-      {showTagline ? (
-        <span
-          className={cn(
-            "mt-1 text-xs font-semibold",
-            onDark ? "text-brand-yellow" : "text-gray-600",
-          )}
-        >
-          {t("tagline")}
-        </span>
-      ) : null}
-    </span>
+    // A plain <img> on purpose: three pre-sized WebP files, no image
+    // optimisation round-trip on every page for a 7-25 KB asset.
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src="/brand/logo-360.webp"
+      srcSet="/brand/logo-180.webp 180w, /brand/logo-360.webp 360w, /brand/logo-540.webp 540w"
+      sizes={variant.sizes}
+      width={540}
+      height={359}
+      alt={`${t("name")} - ${t("tagline")}`}
+      loading={priority ? "eager" : "lazy"}
+      fetchPriority={priority ? "high" : undefined}
+      decoding="async"
+      className={cn("w-auto select-none mix-blend-lighten", variant.className, className)}
+    />
   );
 }

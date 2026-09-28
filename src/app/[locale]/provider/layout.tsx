@@ -38,7 +38,7 @@ export default async function ProviderLayout({
       <header className="dark-surface bg-ink text-white">
         <div className="flex items-center justify-between gap-3 p-3">
           <Link href="/provider" aria-label={t("title")}>
-            <Logo onDark />
+            <Logo size="sm" priority />
           </Link>
           <div className="flex items-center gap-2">
             <LanguageSwitcher onDark />

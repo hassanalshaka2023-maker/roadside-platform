@@ -19,7 +19,7 @@ export async function PublicFooter() {
       <div className="hazard-divider" />
       <div className="container grid gap-8 py-10 sm:grid-cols-2 lg:grid-cols-3">
         <div>
-          <Logo onDark showTagline />
+          <Logo size="lg" />
           <p className="mt-3 text-sm text-gray-300">{t("brand.sloganSafer")}</p>
         </div>
 

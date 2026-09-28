@@ -6,6 +6,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { OfflineBanner } from "@/components/layout/OfflineBanner";
 import { directionOf, routing } from "@/i18n/routing";
+import { env } from "@/lib/env";
 
 import "../globals.css";
 
@@ -37,8 +38,11 @@ export async function generateMetadata({
   const t = await getTranslations({ locale, namespace: "metadata" });
 
   return {
+    // Absolute URLs for the link preview (opengraph-image.jpg) and icons.
+    metadataBase: new URL(env.APP_URL),
     title: t("title"),
     description: t("description"),
+    openGraph: { siteName: t("title"), locale: locale === "ar" ? "ar_SY" : "en_US", type: "website" },
     // The app is not meant to be indexed piecemeal by locale-less URLs.
     alternates: {
       languages: { ar: "/ar", en: "/en" },

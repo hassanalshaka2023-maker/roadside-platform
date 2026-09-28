@@ -67,7 +67,7 @@ No online payments, no native mobile apps, no insurance features, no live GPS tr
 - Latin/transliterated name for code, URLs and metadata: Najdat Al-Tariq 24 (spelling to be confirmed by me)
 - Tagline: معك على الطريق دائماً
 - Secondary slogans (use sparingly): خدمة موثوقة .. أينما كنت | معاً لطرق أكثر أماناً في سوريا | ثقتكم دافعنا للاستمرار
-- Logo: gear + wrench above a road with speed lines, with a bold "24" and a red circular clock arrow. The real logo files go in public/brand/. NEVER redraw or approximate the logo. Until the files exist, use a text placeholder in a reusable <Logo /> component
+- Logo: gear + wrench above a road with speed lines, with a bold "24" and a red circular clock arrow. Master artwork: design/logo.png (on black); resized WebP files in public/brand/, rendered by <Logo />; app icons and link preview in src/app/[locale]/. NEVER redraw or approximate the logo
 
 ### Colors (approximate, taken from the flyer; design/flyer.jpg is the visual reference)
 - brand-yellow: #FFD400 (primary; hover #E6BC00; soft tint #FFF6C2)

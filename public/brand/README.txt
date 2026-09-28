@@ -1,5 +1,7 @@
-# Real logo files go here.
+# Brand files served to browsers.
 
-# Expected: logo.svg, logo-mark.svg, logo-on-dark.svg, favicon.
-# NEVER redraw or approximate the logo in code - see CLAUDE.md.
-# Until these exist, <Logo /> renders a typographic placeholder.
+logo-180.webp, logo-360.webp, logo-540.webp are resized from design/logo.png
+(the master artwork, kept out of /public). Rendered by <Logo />.
+App icons and the link preview live in src/app/[locale]/ (icon.png,
+apple-icon.png, opengraph-image.jpg).
+NEVER redraw or approximate the logo in code - see CLAUDE.md.

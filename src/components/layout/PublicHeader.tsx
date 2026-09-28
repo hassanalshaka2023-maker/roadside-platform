@@ -41,9 +41,9 @@ export async function PublicHeader() {
 
   return (
     <header className="dark-surface sticky top-0 z-30 bg-ink text-white">
-      <div className="container flex items-center justify-between gap-2 py-2.5">
+      <div className="container flex items-center justify-between gap-2 py-1.5">
         <Link href="/" className="inline-flex shrink-0 items-center" aria-label={t("home")}>
-          <Logo onDark showTagline />
+          <Logo priority />
         </Link>
 
         {/* Desktop */}
