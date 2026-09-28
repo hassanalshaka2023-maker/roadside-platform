@@ -68,6 +68,11 @@ Leave everything else at its default.
 
 ## 5. First data (admins, services, settings)
 
+Automatic: `vercel-build` runs the seed on every deploy. It is idempotent,
+never overwrites settings changed in the admin panel, never creates demo data
+in production, and sets the admin passwords from `SEED_*_PASSWORD`.
+The manual route below is only needed outside Vercel.
+
 Once, from your computer, against the production database (no demo data is
 created when `NODE_ENV=production`):
 
