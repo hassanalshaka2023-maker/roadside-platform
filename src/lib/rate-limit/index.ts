@@ -59,6 +59,8 @@ export const RATE_LIMITS = {
   offerPerUser: { limit: 40, windowSeconds: HOUR },
   /** Complaints filed by one user. */
   complaintPerUser: { limit: 5, windowSeconds: 24 * HOUR },
+  /** Staff email/password changes: each attempt costs a password check. */
+  accountChangePerUser: { limit: 10, windowSeconds: 15 * MINUTE },
   /** Every other state-changing action (accept, confirm, status updates). */
   mutationPerUser: { limit: 120, windowSeconds: 10 * MINUTE },
 

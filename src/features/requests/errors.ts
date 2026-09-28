@@ -39,7 +39,11 @@ export type DomainErrorCode =
   | "APPLICATION_LOCKED"
   | "APPLICATION_INCOMPLETE"
   | "INVALID_DECISION"
-  | "PROVIDER_ROLE_CONFLICT";
+  | "PROVIDER_ROLE_CONFLICT"
+  // staff account
+  | "WRONG_PASSWORD"
+  | "EMAIL_TAKEN"
+  | "NOTHING_TO_CHANGE";
 
 export class DomainError extends Error {
   constructor(

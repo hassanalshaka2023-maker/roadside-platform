@@ -70,7 +70,11 @@ Leave everything else at its default.
 
 Automatic: `vercel-build` runs the seed on every deploy. It is idempotent,
 never overwrites settings changed in the admin panel, never creates demo data
-in production, and sets the admin passwords from `SEED_*_PASSWORD`.
+in production, and creates each admin level from `SEED_*` only while no
+account of that level exists. After that, admins change their email and
+password in the panel (`/ar/admin/account`); deploys never reset them.
+Forgot the password? Set `SEED_RESET_ADMINS=true` in Vercel, redeploy, sign in
+with the `SEED_*` values, then remove the variable and redeploy again.
 The manual route below is only needed outside Vercel.
 
 Once, from your computer, against the production database (no demo data is

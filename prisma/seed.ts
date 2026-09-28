@@ -175,55 +175,49 @@ const OBSOLETE_SETTINGS = [
 // Seeding steps
 // ---------------------------------------------------------------------------
 
+/**
+ * Creates the first SUPER_ADMIN and DISPATCHER from SEED_* - once.
+ *
+ * The seed runs on every deploy, so it must never overwrite credentials an
+ * admin changed from "My account": an admin level that already has an
+ * account is left alone. SEED_RESET_ADMINS=true restores the SEED_* email and
+ * password (and clears lockouts) - the recovery path for a forgotten password.
+ */
+async function seedAdmin(level: "SUPER_ADMIN" | "DISPATCHER", email: string, password: string, name: string) {
+  const reset = process.env.SEED_RESET_ADMINS === "true";
+
+  if (!reset) {
+    const existing = await prisma.user.findFirst({
+      where: { role: "ADMIN", adminLevel: level, deletedAt: null },
+      orderBy: { createdAt: "asc" },
+      select: { email: true },
+    });
+    if (existing) return `${existing.email} (${level}, unchanged)`;
+  }
+
+  const passwordHash = await hashPassword(password);
+  const user = await prisma.user.upsert({
+    where: { email },
+    create: { email, role: "ADMIN", adminLevel: level, name, passwordHash, status: "ACTIVE" },
+    update: { role: "ADMIN", adminLevel: level, passwordHash, status: "ACTIVE", failedLoginCount: 0, lockedUntil: null },
+  });
+  return `${user.email} (${level}, ${reset ? "reset" : "created"})`;
+}
+
 async function seedAdmins() {
-  const adminEmail = required("SEED_ADMIN_EMAIL").toLowerCase();
-  const adminPassword = required("SEED_ADMIN_PASSWORD");
-  const dispatcherEmail = required("SEED_DISPATCHER_EMAIL").toLowerCase();
-  const dispatcherPassword = required("SEED_DISPATCHER_PASSWORD");
-
-  const superAdmin = await prisma.user.upsert({
-    where: { email: adminEmail },
-    create: {
-      email: adminEmail,
-      role: "ADMIN",
-      adminLevel: "SUPER_ADMIN",
-      name: "المدير العام",
-      passwordHash: await hashPassword(adminPassword),
-      status: "ACTIVE",
-    },
-    // Re-running with a changed password in .env updates it, and clears any
-    // lockout left over from testing.
-    update: {
-      role: "ADMIN",
-      adminLevel: "SUPER_ADMIN",
-      passwordHash: await hashPassword(adminPassword),
-      status: "ACTIVE",
-      failedLoginCount: 0,
-      lockedUntil: null,
-    },
-  });
-
-  const dispatcher = await prisma.user.upsert({
-    where: { email: dispatcherEmail },
-    create: {
-      email: dispatcherEmail,
-      role: "ADMIN",
-      adminLevel: "DISPATCHER",
-      name: "موزّع الطلبات",
-      passwordHash: await hashPassword(dispatcherPassword),
-      status: "ACTIVE",
-    },
-    update: {
-      role: "ADMIN",
-      adminLevel: "DISPATCHER",
-      passwordHash: await hashPassword(dispatcherPassword),
-      status: "ACTIVE",
-      failedLoginCount: 0,
-      lockedUntil: null,
-    },
-  });
-
-  console.log(`  admins:        ${superAdmin.email} (SUPER_ADMIN), ${dispatcher.email} (DISPATCHER)`);
+  const superAdmin = await seedAdmin(
+    "SUPER_ADMIN",
+    required("SEED_ADMIN_EMAIL").toLowerCase(),
+    required("SEED_ADMIN_PASSWORD"),
+    "المدير العام",
+  );
+  const dispatcher = await seedAdmin(
+    "DISPATCHER",
+    required("SEED_DISPATCHER_EMAIL").toLowerCase(),
+    required("SEED_DISPATCHER_PASSWORD"),
+    "موزّع الطلبات",
+  );
+  console.log(`  admins:        ${superAdmin}, ${dispatcher}`);
 }
 
 async function seedServiceTypes() {

@@ -1,6 +1,6 @@
 # Project status
 
-Last updated: 2026-09-26. Keep this file current: it is how work resumes
+Last updated: 2026-09-28. Keep this file current: it is how work resumes
 without losing context.
 
 ## Decisions in force (2026-09-25)
@@ -80,5 +80,6 @@ later by phone creates two accounts.
   when pages load.
 - ID-document retention job (automatic deletion).
 - Committed e2e suite (Playwright) and CI.
-- Admin UI to create admin accounts (today: seed / `.env`).
+- Admin UI to create more admin accounts (today: seed / `.env`). Each admin
+  already changes their own email and password at `/admin/account`.
 - PWA, performance pass.

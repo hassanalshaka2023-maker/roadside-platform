@@ -297,7 +297,11 @@
     "NAME_AND_GOVERNORATE_REQUIRED": "Enter your full name and choose a governorate before saving",
     "INVALID_RADIUS": "The work radius must be between 1 and 300 km",
     "NOTICE_TOO_SHORT": "That date is too soon. Providers must be notified for the required period first",
-    "INVALID_PHONE_LIST": "Phone numbers must be 10 digits starting with 0, separated by spaces"
+    "INVALID_PHONE_LIST": "Phone numbers must be 10 digits starting with 0, separated by spaces",
+    "CURRENT_PASSWORD_REQUIRED": "Enter your current password",
+    "PASSWORD_TOO_SHORT": "The new password is too short. Use at least 12 characters",
+    "PASSWORDS_DO_NOT_MATCH": "The two new passwords do not match",
+    "INVALID_EMAIL": "The email address is not valid"
   },
   "domainErrors": {
     "NOT_FOUND": "We couldn't find that, or you don't have access to it",
@@ -327,7 +331,10 @@
     "APPLICATION_INCOMPLETE": "The application is incomplete. Fill in the missing fields and send it",
     "INVALID_DECISION": "This decision is not possible now, or it needs a reason",
     "PROVIDER_ROLE_CONFLICT": "This account cannot register as a provider",
-    "CONTACT_PHONE_REQUIRED": "Add a valid contact phone number (starting with 09)"
+    "CONTACT_PHONE_REQUIRED": "Add a valid contact phone number (starting with 09)",
+    "WRONG_PASSWORD": "The current password is wrong",
+    "EMAIL_TAKEN": "This email is already used by another account",
+    "NOTHING_TO_CHANGE": "Nothing changed. Enter a new email or a new password"
   },
   "tracking": {
     "code": "Request number",
@@ -785,7 +792,20 @@
     "active_off": "off",
     "disable": "Disable",
     "enable": "Enable",
-    "noAudit": "No entries"
+    "noAudit": "No entries",
+    "account": "My account",
+    "accountTitle": "My account",
+    "accountCurrent": "Current sign-in details",
+    "accountEmail": "Email",
+    "accountChange": "Change email or password",
+    "accountNewEmail": "New email",
+    "accountKeepHint": "Leave empty to keep the current one",
+    "accountNewPassword": "New password",
+    "accountPasswordHint": "At least {min} characters. Leave empty to keep the current one",
+    "accountConfirmPassword": "Repeat the new password",
+    "accountCurrentPassword": "Current password (required to confirm)",
+    "accountSessionsNote": "Saving signs you out on every other device; you stay signed in here.",
+    "accountSaved": "Saved. Use the new details next time you sign in"
   },
   "errors": {
     "notFoundTitle": "Page not found",

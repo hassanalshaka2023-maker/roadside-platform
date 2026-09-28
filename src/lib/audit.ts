@@ -24,6 +24,7 @@ export type AuditAction =
   | "auth.admin.login.success"
   | "auth.admin.login.failure"
   | "auth.admin.login.locked"
+  | "auth.admin.credentials.changed"
   | "auth.otp.requested"
   | "auth.otp.verified"
   | "auth.logout"

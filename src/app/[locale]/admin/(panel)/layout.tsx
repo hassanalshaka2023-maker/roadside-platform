@@ -42,6 +42,7 @@ export default async function AdminPanelLayout({
     { href: "/admin/customers", label: t("customers"), permission: "viewCustomers" },
     { href: "/admin/audit", label: t("auditLog"), permission: "viewAuditLog" },
     { href: "/admin/settings", label: t("settings"), permission: "manageSettings" },
+    { href: "/admin/account", label: t("account"), permission: "manageOwnAccount" },
   ];
 
   const navItems: AdminNavItem[] = candidates

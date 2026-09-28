@@ -65,6 +65,9 @@ export const PERMISSIONS = [
    * national ID. SUPER_ADMIN only, and every use is written to AuditLog.
    */
   "viewIdDocuments",
+
+  /** Change one's own staff email and password. Every admin level. */
+  "manageOwnAccount",
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
@@ -105,6 +108,7 @@ const DISPATCHER_PERMISSIONS = [
   "viewProviders",
   "manageComplaints",
   "resolveDisputes",
+  "manageOwnAccount",
 ] as const satisfies readonly Permission[];
 
 /** Everything, without exception. */

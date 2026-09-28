@@ -149,9 +149,11 @@ Damascus shows up in their feed.
 
 ### Admin accounts
 
-Created by the seed from `SEED_ADMIN_*` / `SEED_DISPATCHER_*` in `.env`.
-Use long random passwords, never commit `.env`, and re-run `npm run db:seed`
-after changing them. There is no sign-up for admins.
+Created once by the seed from `SEED_ADMIN_*` / `SEED_DISPATCHER_*` in `.env`
+(only while no admin of that level exists). Each admin then changes their own
+email and password under **My account** (`/ar/admin/account`). To restore the
+`SEED_*` credentials (forgotten password), run the seed with
+`SEED_RESET_ADMINS=true`. There is no sign-up for admins.
 
 ---
 

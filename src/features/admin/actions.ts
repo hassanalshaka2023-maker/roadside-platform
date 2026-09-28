@@ -5,8 +5,10 @@ import { z } from "zod";
 
 import { formAmount, formBool, formInt, formString, runAction, type ActionResult } from "@/lib/action-result";
 import { audit } from "@/lib/audit";
+import { readSessionFromCookie } from "@/lib/auth/session";
 import { prisma } from "@/lib/db";
 import { percentToBps } from "@/lib/money";
+import { accountChangeSchema, changeOwnCredentials } from "@/features/admin/account";
 import { settleAllDue, waiveEntry } from "@/features/commission/service";
 import { updateComplaint } from "@/features/feedback/service";
 import { resolveByAdmin } from "@/features/jobs/service";
@@ -232,4 +234,25 @@ export async function toggleServiceAction(_prev: ActionResult, formData: FormDat
     refresh();
     return undefined;
   });
+}
+
+// --- own account ------------------------------------------------------------
+
+export async function changeOwnCredentialsAction(_prev: ActionResult, formData: FormData): Promise<ActionResult> {
+  return runAction(
+    "manageOwnAccount",
+    async ({ user, ip }) => {
+      const input = accountChangeSchema.parse({
+        currentPassword: formString(formData, "currentPassword"),
+        email: formString(formData, "email"),
+        newPassword: formString(formData, "newPassword"),
+        confirmPassword: formString(formData, "confirmPassword"),
+      });
+      const session = await readSessionFromCookie();
+      await changeOwnCredentials({ userId: user.id, input, keepSessionId: session?.sessionId ?? null, ip });
+      refresh();
+      return undefined;
+    },
+    { rateLimit: "accountChangePerUser" },
+  );
 }
