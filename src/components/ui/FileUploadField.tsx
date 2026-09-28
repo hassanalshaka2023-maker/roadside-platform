@@ -44,6 +44,32 @@ const ID_KINDS: UploadKind[] = ["ID_FRONT", "ID_BACK", "SELFIE", "VEHICLE_DOCUME
 type Phase = "idle" | "compressing" | "uploading" | "done" | "error";
 
 /**
+ * Decodes a picked image. createImageBitmap first (fast, off the main
+ * thread); an <img> element as the fallback, for old phone browsers that lack
+ * createImageBitmap or cannot use it for some formats.
+ */
+async function decodeImage(file: File): Promise<ImageBitmap | HTMLImageElement> {
+  if (typeof createImageBitmap === "function") {
+    try {
+      return await createImageBitmap(file);
+    } catch {
+      // fall through to the <img> path
+    }
+  }
+  const url = URL.createObjectURL(file);
+  try {
+    return await new Promise<HTMLImageElement>((resolve, reject) => {
+      const image = new Image();
+      image.onload = () => resolve(image);
+      image.onerror = () => reject(new Error("decode failed"));
+      image.src = url;
+    });
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+/**
  * Upload control for a single image.
  *
  * Compresses in the browser before sending. That is not a nicety here: a
@@ -84,15 +110,21 @@ export function FileUploadField({
   useEffect(() => {
     return () => {
       if (previewUrl) URL.revokeObjectURL(previewUrl);
-      xhrRef.current?.abort();
     };
   }, [previewUrl]);
 
+  // Abort an in-flight upload only when the field goes away. This must NOT
+  // share the effect above: that one re-runs whenever the preview changes -
+  // which happens right as an upload starts - and would cancel it.
+  useEffect(() => {
+    return () => xhrRef.current?.abort();
+  }, []);
+
   /** Draws the image onto a canvas at a bounded size and re-encodes as JPEG. */
   const compress = useCallback(async (file: File): Promise<Blob> => {
-    let bitmap: ImageBitmap;
+    let bitmap: ImageBitmap | HTMLImageElement;
     try {
-      bitmap = await createImageBitmap(file);
+      bitmap = await decodeImage(file);
     } catch {
       // Browser could not decode it at all (a HEIC outside Safari, or junk).
       throw new Error("UNSUPPORTED_TYPE");
@@ -113,7 +145,7 @@ export function FileUploadField({
     if (!context) throw new Error("CORRUPT");
 
     context.drawImage(bitmap, 0, 0, width, height);
-    bitmap.close();
+    if ("close" in bitmap) bitmap.close();
 
     // Drawing through a canvas discards EXIF as a side effect, so GPS
     // coordinates never leave the device. The server re-encodes again anyway.

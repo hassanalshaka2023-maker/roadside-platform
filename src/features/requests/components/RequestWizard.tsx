@@ -201,9 +201,6 @@ export function RequestWizard({
     const next: Record<string, string> = {};
     if (draft.lat === null || draft.lng === null) next.map = msg("LOCATION_REQUIRED");
     if (!draft.governorate) next.governorate = msg("GOVERNORATE_REQUIRED");
-    if (draft.locationApproximate && draft.landmarkText.trim().length < 5) {
-      next.landmarkText = msg("LANDMARK_REQUIRED");
-    }
     if (draft.lat !== null && draft.lng !== null) {
       const parsed = locationStepSchema.safeParse({
         lat: draft.lat,
@@ -232,9 +229,6 @@ export function RequestWizard({
     if (needsDestination) {
       const destination = destinationSchema.safeParse({ destinationText: draft.destinationText });
       if (!destination.success) next.destinationText = msg("DESTINATION_REQUIRED");
-    }
-    if (!draft.problemUnknown && !needsDestination && draft.problemDescription.trim().length === 0) {
-      next.problemDescription = msg("PROBLEM_REQUIRED");
     }
     setErrors(next);
     return Object.keys(next).length === 0;
@@ -449,8 +443,7 @@ export function RequestWizard({
             label={t("wizard.landmark")}
             hint={t("wizard.landmarkHint")}
             error={errors.landmarkText}
-            required={draft.locationApproximate}
-            optionalLabel={draft.locationApproximate ? undefined : t("common.optional")}
+            optionalLabel={t("common.optional")}
           >
             <Input
               id="landmarkText"
@@ -560,8 +553,7 @@ export function RequestWizard({
             label={t("wizard.problem")}
             hint={t("wizard.problemHint")}
             error={errors.problemDescription}
-            optionalLabel={draft.problemUnknown || needsDestination ? t("common.optional") : undefined}
-            required={!draft.problemUnknown && !needsDestination}
+            optionalLabel={t("common.optional")}
           >
             <Textarea
               id="problemDescription"

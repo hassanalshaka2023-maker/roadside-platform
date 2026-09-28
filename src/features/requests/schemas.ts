@@ -114,11 +114,13 @@ export const createRequestSchema = serviceTypeStepSchema
     idConsentAccepted: z.boolean().optional(),
   });
 
-/** Without a pin, the landmark description is the location. */
-export const createRequestInputSchema = createRequestSchema.refine(
-  (input) => !input.locationApproximate || (input.landmarkText ?? "").trim().length >= 5,
-  { message: "LANDMARK_REQUIRED", path: ["landmarkText"] },
-);
+/**
+ * What the request form submits. Only the service, the governorate (plus a
+ * pin, or the governorate centre when the map could not be used) and - for
+ * towing - the destination are required: everything else is optional, so a
+ * stressed customer on a bad connection can send help requests fast.
+ */
+export const createRequestInputSchema = createRequestSchema;
 
 export type CreateRequestInput = z.infer<typeof createRequestSchema>;
 export type LocationStepInput = z.infer<typeof locationStepSchema>;

@@ -811,7 +811,7 @@
     "uploadedNoPreview": "Uploaded. For security it cannot be shown again.",
     "preview": "Photo preview",
     "progress": "{percent}% done",
-    "hint": "JPG, PNG or WebP, up to 8 MB",
+    "hint": "Any photo from the camera or gallery (JPG, PNG or WebP). We shrink it automatically before uploading to save data.",
     "errors": {
       "EMPTY": "The file is empty. Choose another photo",
       "TOO_LARGE": "The photo is too large. Maximum 8 MB",
