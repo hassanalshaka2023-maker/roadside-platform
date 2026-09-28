@@ -20,7 +20,10 @@ try {
 export default defineConfig({
   schema: "prisma/schema.prisma",
   datasource: {
-    url: env("DATABASE_URL"),
+    // Migrations need a direct connection. Neon (via Vercel) provides one as
+    // DATABASE_URL_UNPOOLED next to the pooled DATABASE_URL; locally there is
+    // only DATABASE_URL.
+    url: process.env.DATABASE_URL_UNPOOLED || env("DATABASE_URL"),
   },
   migrations: {
     seed: "tsx prisma/seed.ts",

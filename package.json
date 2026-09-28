@@ -24,7 +24,8 @@
     "jobs:sweep": "tsx --conditions=react-server --env-file=.env scripts/sweep.ts",
     "postinstall": "prisma generate",
     "vercel-build": "prisma migrate deploy && next build",
-    "email:test": "tsx scripts/send-test-email.ts"
+    "email:test": "tsx scripts/send-test-email.ts",
+    "storage:check": "tsx --conditions=react-server --env-file=.env scripts/check-storage.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"
