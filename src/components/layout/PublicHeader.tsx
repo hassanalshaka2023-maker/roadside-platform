@@ -1,4 +1,4 @@
-import { LayoutDashboard, Menu, Siren, X } from "lucide-react";
+import { Handshake, LayoutDashboard, Menu, X } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 
 import { Logo } from "@/components/ui/Logo";
@@ -12,12 +12,13 @@ const secondaryLink =
   "inline-flex min-h-touch items-center rounded-lg px-3 text-sm font-bold text-white hover:bg-white/10";
 
 /**
- * One row on every screen: logo, the "get help" button, and - on phones - a
- * menu for the rest. The menu is a <details> element, so it opens even
- * before the page has hydrated on a slow phone.
+ * One row on every screen: logo, one main button, and - on phones - a menu
+ * for the rest. The menu is a <details> element, so it opens even before
+ * the page has hydrated on a slow phone.
  *
- * A signed-in provider sees none of the customer calls to action ("request
- * help", "join us"): their main button goes back to their dashboard.
+ * The main button is "Join as a provider": "request help" already leads the
+ * home page, and repeating it in the header put it on screen twice. A
+ * signed-in provider gets "My dashboard" instead.
  */
 export async function PublicHeader() {
   const [t, user] = await Promise.all([getTranslations("nav"), getCurrentUser()]);
@@ -25,15 +26,10 @@ export async function PublicHeader() {
 
   const primary = isProvider
     ? { href: "/provider", label: t("myDashboard"), Icon: LayoutDashboard }
-    : { href: "/request", label: t("requestService"), Icon: Siren };
+    : { href: "/apply", label: t("joinAsProvider"), Icon: Handshake };
 
   const links = (
     <>
-      {isProvider ? null : (
-        <Link href="/apply" className={secondaryLink}>
-          {t("joinAsProvider")}
-        </Link>
-      )}
       {user ? (
         <>
           <Link href="/account" className={secondaryLink}>
