@@ -45,6 +45,26 @@ option for later).
 - Links opened inside WhatsApp/Facebook keep their own cookies; installing the
   app (and signing in once inside it) is the fix to tell providers about.
 
+## Provider password sign-in (added 2026-10-04)
+
+- `/login` defaults to email-or-phone + password (`src/lib/auth/password-login.ts`);
+  "sign in with a code" stays for first-time users and customers. Arriving
+  with `next=/apply` starts on the code.
+- Providers must have a password: the provider layout and `/apply` send
+  anyone without one to `/account/password` first (existing providers set
+  it on their next visit).
+- `/forgot-password`: code to the account's email/phone (OTP purpose
+  `PASSWORD_RESET`), new password, other sessions revoked, lockout cleared.
+  Same answer whether or not the account exists.
+- Phone + password uses the VERIFIED `phone` only, never `contactPhone`.
+  Phone resets need the SMS gateway (see below); email works today.
+- Same defences as staff login: generic error, dummy hash for unknown
+  accounts, per-identifier/IP rate limits, lockout after 5 wrong tries.
+- Logging out sends a provider to `/login`; the installed app opens
+  `/launch`, which sends a signed-in provider straight to `/provider`.
+  An app installed before this change may keep the old start page until
+  Chrome refreshes the manifest (or it is reinstalled).
+
 ## Push notifications (added 2026-10-03)
 
 Web Push through the service worker; works in Chrome/Android in the browser

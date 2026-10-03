@@ -4,10 +4,10 @@ import type { MetadataRoute } from "next";
  * Web app manifest: what makes "Add to home screen" install a real app icon
  * that opens full-screen instead of a browser tab.
  *
- * start_url is "/" so the locale proxy sends people to their own language;
- * a signed-in provider then lands on their dashboard through the shortcut,
- * or one tap from the header. Arabic is the product's primary language, so
- * the manifest itself is Arabic and RTL.
+ * start_url is "/launch": the locale proxy adds the person's language, and
+ * the launch page sends a signed-in provider straight to their dashboard
+ * (src/app/[locale]/launch/page.tsx). Arabic is the product's primary
+ * language, so the manifest itself is Arabic and RTL.
  *
  * Icons are generated from design/logo.png by scripts/generate-pwa-icons.mjs.
  */
@@ -19,7 +19,7 @@ export default function manifest(): MetadataRoute.Manifest {
     description: "مساعدة على الطريق في كل سوريا، على مدار الساعة",
     lang: "ar",
     dir: "rtl",
-    start_url: "/",
+    start_url: "/launch",
     scope: "/",
     display: "standalone",
     orientation: "portrait",

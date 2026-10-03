@@ -49,6 +49,10 @@ export const RATE_LIMITS = {
   adminLoginPerEmail: { limit: 10, windowSeconds: 15 * MINUTE },
   /** Admin login attempts per IP, to stop spraying across many accounts. */
   adminLoginPerIp: { limit: 20, windowSeconds: 15 * MINUTE },
+  /** Provider/customer password sign-in attempts per email or phone. */
+  passwordLoginPerIdentifier: { limit: 10, windowSeconds: 15 * MINUTE },
+  /** Password sign-in attempts per IP. Generous: whole areas share an IP. */
+  passwordLoginPerIp: { limit: 40, windowSeconds: 15 * MINUTE },
   /** Service requests created by one customer (phase 3). */
   requestCreatePerUser: { limit: 5, windowSeconds: HOUR },
   /** Provider applications from one IP (phase 4). */

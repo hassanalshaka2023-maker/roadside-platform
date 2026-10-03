@@ -38,6 +38,8 @@ export interface AuthUser {
   /** Unverified number given by an email user, for providers to call. */
   contactPhone: string | null;
   isPhoneVerified: boolean;
+  /** Providers must have one; see src/lib/auth/password-login.ts. */
+  hasPassword: boolean;
 }
 
 /**
@@ -63,6 +65,7 @@ export const getCurrentUser = cache(async (): Promise<AuthUser | null> => {
       email: true,
       contactPhone: true,
       isPhoneVerified: true,
+      passwordHash: true,
       status: true,
       deletedAt: true,
     },
@@ -86,6 +89,7 @@ export const getCurrentUser = cache(async (): Promise<AuthUser | null> => {
     email: user.email,
     contactPhone: user.contactPhone,
     isPhoneVerified: user.isPhoneVerified,
+    hasPassword: user.passwordHash !== null,
   };
 
   await touchSession(session, user.role === "ADMIN");

@@ -7,8 +7,15 @@ import { adminLogin } from "@/lib/auth/admin-login";
 import { assertSameOrigin, CsrfError } from "@/lib/auth/csrf";
 import { getCurrentUser } from "@/lib/auth/current-user";
 import { completeSignIn, parseChannel, sendSignInCode, type CodeFlowState } from "@/lib/auth/code-sign-in";
+import {
+  completePasswordReset,
+  passwordLogin,
+  requestPasswordReset,
+  setOwnPassword,
+} from "@/lib/auth/password-login";
 import { destroyCurrentSession } from "@/lib/auth/session";
 import { env } from "@/lib/env";
+import { consumeLimit } from "@/lib/rate-limit";
 import { getRequestContext } from "@/lib/request-context";
 import { safeNextPath } from "./next-path";
 import { adminLoginSchema } from "./schemas";
@@ -91,6 +98,103 @@ export async function verifyOtpAction(
 }
 
 // ---------------------------------------------------------------------------
+// Email-or-phone + password (providers, and customers who set one)
+// ---------------------------------------------------------------------------
+
+/** Where a freshly signed-in person goes. */
+function homeFor(locale: string, role: "CUSTOMER" | "PROVIDER", next: unknown): string {
+  return `/${locale}${safeNextPath(next) ?? (role === "PROVIDER" ? "/provider" : "/account")}`;
+}
+
+export async function passwordLoginAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const blocked = await guard();
+  if (blocked) return blocked;
+
+  const locale = String(formData.get("locale") ?? "ar");
+  const context = await getRequestContext();
+  const result = await passwordLogin(
+    String(formData.get("identifier") ?? "").slice(0, 320),
+    String(formData.get("password") ?? "").slice(0, 200),
+    context,
+  );
+
+  if (!result.ok) {
+    return {
+      ok: false,
+      errorKey: `passwordAuth.loginErrors.${result.reason}`,
+      errorValues: { minutes: Math.max(1, Math.ceil((result.retryAfterSeconds ?? 0) / 60)) },
+    };
+  }
+  redirect(homeFor(locale, result.role, formData.get("next")));
+}
+
+export async function requestPasswordResetAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const blocked = await guard();
+  if (blocked) return blocked;
+
+  const context = await getRequestContext();
+  const result = await requestPasswordReset({
+    raw: String(formData.get("identifier") ?? "").slice(0, 320),
+    locale: String(formData.get("locale") ?? "ar"),
+    ip: context.ip,
+  });
+  if (!result.ok) return { ok: false, errorKey: result.errorKey, errorValues: result.errorValues };
+  return {
+    ok: true,
+    channel: result.identifier.kind,
+    destination: result.identifier.value,
+    resendAfterSeconds: result.resendAfterSeconds,
+  };
+}
+
+export async function completePasswordResetAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const blocked = await guard();
+  if (blocked) return blocked;
+
+  const locale = String(formData.get("locale") ?? "ar");
+  const destination = String(formData.get("destination") ?? "");
+  const context = await getRequestContext();
+  const result = await completePasswordReset({
+    raw: destination,
+    code: String(formData.get("code") ?? ""),
+    password: String(formData.get("password") ?? ""),
+    confirm: String(formData.get("confirm") ?? ""),
+    ip: context.ip,
+    userAgent: context.userAgent,
+  });
+  if (!result.ok) {
+    // Keep the person on the code step: echo back where the code went.
+    return { ok: false, destination, errorKey: result.errorKey, errorValues: result.errorValues };
+  }
+  redirect(homeFor(locale, result.role, null));
+}
+
+export async function setPasswordAction(_prev: ActionState, formData: FormData): Promise<ActionState> {
+  const blocked = await guard();
+  if (blocked) return blocked;
+
+  const user = await getCurrentUser();
+  if (!user || user.role === "ADMIN") return { ok: false, errorKey: "errors.unauthorized" };
+
+  const limit = await consumeLimit("accountChangePerUser", user.id);
+  if (!limit.allowed) return { ok: false, errorKey: "domainErrors.RATE_LIMITED", errorValues: { seconds: 60 } };
+
+  const locale = String(formData.get("locale") ?? "ar");
+  const context = await getRequestContext();
+  const result = await setOwnPassword({
+    userId: user.id,
+    currentPassword: String(formData.get("currentPassword") ?? ""),
+    password: String(formData.get("password") ?? ""),
+    confirm: String(formData.get("confirm") ?? ""),
+    ip: context.ip,
+    userAgent: context.userAgent,
+  });
+  if (!result.ok) return { ok: false, errorKey: `passwordAuth.problem.${result.reason}` };
+
+  redirect(homeFor(locale, user.role, formData.get("next")));
+}
+
+// ---------------------------------------------------------------------------
 // Admin login
 // ---------------------------------------------------------------------------
 
@@ -150,5 +254,6 @@ export async function logoutAction(formData: FormData): Promise<void> {
     });
   }
 
-  redirect(`/${locale}`);
+  // A provider comes back through the password form; a customer just goes home.
+  redirect(user?.role === "PROVIDER" ? `/${locale}/login` : `/${locale}`);
 }

@@ -55,6 +55,8 @@ enum OtpPurpose {
   LOGIN
   APPLICATION
   REQUEST
+  /// "Forgot password": proves the person still owns the email/phone.
+  PASSWORD_RESET
 }
 
 enum FileKind {
@@ -210,7 +212,8 @@ model User {
   /// looks at this column, so nobody can take over an account by typing
   /// someone else's number here.
   contactPhone     String?
-  /// argon2id. Admins only.
+  /// argon2id. Admins always; providers must set one (they sign in with it);
+  /// customers usually have none and sign in with a code.
   passwordHash     String?
   name             String?
   isPhoneVerified  Boolean     @default(false)

@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { LanguageSwitcher } from "@/components/layout/LanguageSwitcher";
@@ -27,7 +28,10 @@ export default async function ProviderLayout({
   const { locale } = await params;
   setRequestLocale(locale);
 
-  await requireRole(locale, ["PROVIDER"], "customer");
+  const user = await requireRole(locale, ["PROVIDER"], "customer");
+  // Providers sign in with a password; one approved before that rule (or
+  // signed in by code) sets it before going any further.
+  if (!user.hasPassword) redirect(`/${locale}/account/password?next=/provider`);
   const t = await getTranslations("provider");
 
   const nav = [

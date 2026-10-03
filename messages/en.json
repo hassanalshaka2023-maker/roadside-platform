@@ -1087,5 +1087,52 @@
     "iosInstallFirst": "On iPhone, notifications work after you add the app to your home screen and open it from its icon",
     "unsupported": "This browser does not support notifications. Try Chrome or install the app",
     "failed": "Could not turn on notifications. Check your connection and try again"
+  },
+  "passwordAuth": {
+    "loginSubtitle": "For providers: enter your email or phone and your password",
+    "codeSubtitle": "First time? We send a code to your email or phone to make sure it is yours",
+    "identifierLabel": "Email or phone number",
+    "identifierHint": "e.g. name@gmail.com or 09XXXXXXXX",
+    "emailOnlyHint": "The email you registered with",
+    "identifierPlaceholder": "name@gmail.com",
+    "invalidIdentifier": "Enter a valid email or a Syrian phone number starting with 09",
+    "forgot": "Forgot your password?",
+    "firstTime": "First time, or no password yet?",
+    "useCode": "Sign in with a code",
+    "wantToJoin": "Want to work with us as a provider?",
+    "applyLink": "Apply to join",
+    "haveAccount": "Have a password?",
+    "usePassword": "Sign in with your password",
+    "show": "Show password",
+    "hide": "Hide password",
+    "loginErrors": {
+      "INVALID_CREDENTIALS": "Those details are not right. Check your email or phone and your password",
+      "LOCKED": "Too many wrong attempts. Try again in {minutes} min, or use “Forgot your password?”",
+      "RATE_LIMITED": "Too many attempts. Try again in {minutes} min"
+    },
+    "forgotTitle": "Forgot your password",
+    "forgotSubtitle": "Enter your email or phone and we will send a code so you can choose a new password",
+    "codeSentEmail": "If an account uses this email, we sent a 6-digit code to {to}",
+    "codeSentPhone": "If an account uses this number, we sent a 6-digit code to {to}",
+    "saveAndSignIn": "Save password and sign in",
+    "backToLogin": "Back to sign in",
+    "resetEmailSubject": "Your password reset code - Najdat Al-Tariq 24",
+    "resetEmailBody": "Your Najdat Al-Tariq 24 password reset code is {code}. It is valid for {minutes} minutes. If you did not ask for it, ignore this message; your password will not change.",
+    "resetSmsBody": "Najdat Al-Tariq 24: password reset code {code} (valid {minutes} min). Do not share it.",
+    "setTitle": "Choose a password",
+    "setSubtitle": "You will sign in to your provider account with it and your email or phone, without waiting for a code each time",
+    "changeTitle": "Change password",
+    "changeSubtitle": "After the change, your other devices are signed out",
+    "currentPassword": "Current password",
+    "newPassword": "New password",
+    "newPasswordHint": "At least {min} characters. A short sentence you remember beats complex symbols",
+    "confirmPassword": "Type the password again",
+    "save": "Save",
+    "problem": {
+      "TOO_SHORT": "The password is too short. Use at least 8 characters",
+      "TOO_LONG": "The password is too long",
+      "MISMATCH": "The two passwords do not match",
+      "WRONG_CURRENT": "The current password is not right"
+    }
   }
 }

@@ -52,6 +52,9 @@ export default async function ApplyPage({ params }: { params: Promise<{ locale: 
     );
   }
   if (user.role === "PROVIDER") redirect(`/${locale}/provider`);
+  // An applicant proved their email/phone with a code; before the form they
+  // choose the password they will sign in with as a provider.
+  if (!user.hasPassword) redirect(`/${locale}/account/password?next=/apply`);
 
   const [application, services] = await Promise.all([
     getOwnApplication(user.id),

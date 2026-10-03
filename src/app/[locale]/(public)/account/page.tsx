@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import { ChevronLeft, ChevronRight, KeyRound } from "lucide-react";
 import { getFormatter, getTranslations, setRequestLocale } from "next-intl/server";
 
 import { InstallAppBanner } from "@/components/pwa/InstallAppBanner";
@@ -48,7 +48,19 @@ export default async function AccountPage({ params }: { params: Promise<{ locale
       <p className="mb-6 mt-2 text-sm text-gray-600">{t("account.subtitle")}</p>
 
       <InstallAppBanner className="mb-4" />
-      <NotificationToggle publicKey={vapidPublicKey()} audience="customer" className="mb-6" />
+      <NotificationToggle publicKey={vapidPublicKey()} audience="customer" className="mb-4" />
+      {user.role !== "ADMIN" ? (
+        <Link
+          href="/account/password"
+          className="mb-6 flex min-h-touch items-center justify-between gap-3 rounded-xl border border-gray-200 bg-white p-3 font-bold hover:border-ink"
+        >
+          <span className="flex items-center gap-2">
+            <KeyRound aria-hidden="true" className="h-5 w-5" />
+            {user.hasPassword ? t("passwordAuth.changeTitle") : t("passwordAuth.setTitle")}
+          </span>
+          <Chevron aria-hidden="true" className="h-5 w-5" />
+        </Link>
+      ) : null}
 
       <Card>
         <CardBody className="flex flex-col gap-4">
