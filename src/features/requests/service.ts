@@ -20,6 +20,12 @@ import { randomToken } from "@/lib/crypto";
 import { prisma } from "@/lib/db";
 import { attachFiles, ownsAttachableFiles } from "@/lib/files/service";
 import { loggerFor } from "@/lib/logger";
+import {
+  notifyBookingCancelled,
+  notifyProviderInvited,
+  notifyRequestSearching,
+  notifySearchEnded,
+} from "@/features/notifications/events";
 import { readMatchingSettings } from "@/features/settings/platform";
 import { DomainError } from "./errors";
 import type { CreateRequestInput } from "./schemas";
@@ -343,6 +349,8 @@ export async function createRequest(params: CreateRequestParams): Promise<Create
     ip,
   });
 
+  notifyRequestSearching(created.id);
+
   return { ...created, created: true };
 }
 
@@ -384,7 +392,7 @@ export async function sweepExpiredSearches(now: Date = new Date()): Promise<numb
   let closed = 0;
   for (const request of due) {
     try {
-      await prisma.$transaction(async (tx) => {
+      const to = await prisma.$transaction(async (tx) => {
         const offersThisRound = await tx.requestOffer.count({
           where: {
             requestId: request.id,
@@ -400,8 +408,10 @@ export async function sweepExpiredSearches(now: Date = new Date()): Promise<numb
           actorUserId: null,
           note: "search window closed",
         });
+        return to;
       });
       closed += 1;
+      notifySearchEnded(request.id, to === "EXPIRED");
     } catch (error) {
       // Someone accepted or cancelled at the same moment: they won, fine.
       if (error instanceof DomainError) continue;
@@ -512,7 +522,7 @@ export async function cancelByCustomer(params: {
 }): Promise<void> {
   const { requestId, customerId, reason, ip } = params;
 
-  const from = await prisma.$transaction(async (tx) => {
+  const { from, providerId } = await prisma.$transaction(async (tx) => {
     const request = await loadOwned(tx, requestId, customerId);
     if (!customerCanCancel(request.status)) {
       throw new DomainError("ILLEGAL_TRANSITION", `cancel from ${request.status}`);
@@ -527,7 +537,7 @@ export async function cancelByCustomer(params: {
       data: { cancelledReason: reason || null },
     });
     await closeOpenOffers(tx, requestId);
-    return request.status;
+    return { from: request.status, providerId: request.assignedProviderId };
   });
 
   await audit({
@@ -538,6 +548,8 @@ export async function cancelByCustomer(params: {
     metadata: { from, to: "CANCELLED_BY_CUSTOMER", actor: "CUSTOMER" },
     ip,
   });
+
+  notifyBookingCancelled(requestId, providerId, "customer");
 }
 
 /** "Search again" after a search ended with nobody booked. */
@@ -584,6 +596,8 @@ export async function restartSearch(params: {
     metadata: { from, to: "SEARCHING", actor, reason: "restart" },
     ip,
   });
+
+  notifyRequestSearching(requestId);
 }
 
 /**
@@ -710,7 +724,7 @@ export async function cancelByAdmin(params: {
 }): Promise<void> {
   const { requestId, adminId, reason, ip } = params;
 
-  const from = await prisma.$transaction(async (tx) => {
+  const { from, providerId } = await prisma.$transaction(async (tx) => {
     const request = await loadForTransition(tx, requestId);
     await applyTransition(tx, {
       requestId,
@@ -722,7 +736,7 @@ export async function cancelByAdmin(params: {
       data: { cancelledReason: reason },
     });
     await closeOpenOffers(tx, requestId);
-    return request.status;
+    return { from: request.status, providerId: request.assignedProviderId };
   });
 
   await audit({
@@ -733,6 +747,8 @@ export async function cancelByAdmin(params: {
     metadata: { from, to: "CANCELLED_BY_ADMIN", actor: "ADMIN", reason },
     ip,
   });
+
+  notifyBookingCancelled(requestId, providerId, "admin");
 }
 
 /** Admin pulls a booked request back to searching (provider no-show etc.). */
@@ -744,7 +760,7 @@ export async function reassignByAdmin(params: {
 }): Promise<void> {
   const { requestId, adminId, reason, ip } = params;
 
-  const from = await prisma.$transaction(async (tx) => {
+  const { from, providerId } = await prisma.$transaction(async (tx) => {
     const request = await loadForTransition(tx, requestId);
     await releaseBooking(tx, {
       requestId,
@@ -753,7 +769,7 @@ export async function reassignByAdmin(params: {
       actorUserId: adminId,
       note: `reassigned by admin: ${reason}`,
     });
-    return request.status;
+    return { from: request.status, providerId: request.assignedProviderId };
   });
 
   await audit({
@@ -764,6 +780,9 @@ export async function reassignByAdmin(params: {
     metadata: { from, to: "SEARCHING", actor: "ADMIN", reason: "reassign", note: reason },
     ip,
   });
+
+  notifyBookingCancelled(requestId, providerId, "admin");
+  notifyRequestSearching(requestId, providerId ? [providerId] : []);
 }
 
 /**
@@ -809,4 +828,6 @@ export async function inviteProvider(params: {
     metadata: { providerUserId },
     ip,
   });
+
+  notifyProviderInvited(requestId, providerUserId);
 }

@@ -22,6 +22,10 @@ const secret = (name: string) =>
       message: `${name} still holds the placeholder value from .env.example`,
     });
 
+/** Optional, and an empty line copied from .env.example counts as unset. */
+const blankAsUnset = <T extends z.ZodType>(schema: T) =>
+  z.preprocess((v) => (v === "" ? undefined : v), schema.optional());
+
 /**
  * Parses a versioned key ring: "1:<base64url>,2:<base64url>".
  *
@@ -136,6 +140,18 @@ const EnvSchemaBase = z.object({
   OTP_RESEND_COOLDOWN_SECONDS: z.coerce.number().int().positive().default(60),
   OTP_MAX_PER_PHONE_PER_HOUR: z.coerce.number().int().positive().default(5),
   OTP_MAX_PER_IP_PER_HOUR: z.coerce.number().int().positive().default(20),
+
+  // --- Push notifications (installed app / browser) ------------------------
+  /**
+   * VAPID keys identify this server to the browsers' push services. Generate
+   * once with `node scripts/generate-secrets.mjs` and never rotate casually:
+   * a new key pair silently invalidates every existing subscription.
+   * Leave unset to turn push notifications off.
+   */
+  VAPID_PUBLIC_KEY: blankAsUnset(z.string().min(20)),
+  VAPID_PRIVATE_KEY: blankAsUnset(z.string().min(20)),
+  /** A contact the push services can reach: "mailto:ops@example.com". */
+  VAPID_SUBJECT: blankAsUnset(z.string().startsWith("mailto:").or(z.url())),
 
   // --- Rate limiting ------------------------------------------------------
   RATE_LIMIT_DRIVER: z.enum(["memory", "postgres"]).default("memory"),

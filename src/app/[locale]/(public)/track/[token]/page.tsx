@@ -2,10 +2,12 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getLocale, setRequestLocale } from "next-intl/server";
 
+import { NotificationToggle } from "@/components/pwa/NotificationToggle";
 import { AutoRefresh } from "@/components/ui/AutoRefresh";
 import { listExtras } from "@/features/jobs/queries";
 import { listOffersForRequest } from "@/features/offers/service";
 import { TrackingView } from "@/features/requests/components/TrackingView";
+import { vapidPublicKey } from "@/features/notifications/push";
 import { isValidTrackingToken } from "@/features/requests/schemas";
 import { getByTrackingToken, getStatusHistory, sweepQuietly } from "@/features/requests/service";
 import { isTerminal, type RequestStatusName } from "@/features/requests/state-machine";
@@ -52,6 +54,9 @@ export default async function TrackPage({
   return (
     <div className="container max-w-2xl py-8">
       {!isTerminal(status) ? <AutoRefresh seconds={20} /> : null}
+      {isOwner && !isTerminal(status) ? (
+        <NotificationToggle publicKey={vapidPublicKey()} audience="customer" className="mb-4" />
+      ) : null}
       <TrackingView
         request={request}
         history={history}

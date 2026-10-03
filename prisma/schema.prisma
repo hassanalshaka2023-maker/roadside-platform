@@ -223,6 +223,7 @@ model User {
   updatedAt        DateTime    @updatedAt
 
   sessions             Session[]
+  pushSubscriptions    PushSubscription[]
   customerProfile      CustomerProfile?
   providerProfile      ProviderProfile?
   providerApplication  ProviderApplication?   @relation("ApplicationApplicant")
@@ -266,10 +267,40 @@ model Session {
   createdAt DateTime  @default(now())
   revokedAt DateTime?
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pushSubscriptions PushSubscription[]
 
   @@index([userId])
   @@index([expiresAt])
+}
+
+/// A browser or installed app (PWA) that agreed to receive push
+/// notifications. One user may have several (phone, tablet). Rows are removed
+/// when the push service says the subscription is gone (404/410).
+///
+/// Tied to the session it was created in: only devices that are still signed
+/// in receive anything, so logging out, or an admin revoking sessions on
+/// suspension, silences the device too.
+model PushSubscription {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @db.Uuid
+  sessionId  String   @db.Uuid
+  /// The push service URL (Google FCM, Apple, Mozilla). Unique per device.
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  /// The language the notifications are written in: the page's locale when
+  /// the user turned them on.
+  locale     String   @default("ar")
+  userAgent  String?
+  createdAt  DateTime @default(now())
+  lastUsedAt DateTime?
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  session Session @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([sessionId])
 }
 
 /// One row per issued OTP. The code itself is never stored: only an

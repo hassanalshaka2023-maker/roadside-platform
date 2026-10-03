@@ -19,6 +19,7 @@ import { loggerFor } from "@/lib/logger";
 import { sumSyp } from "@/lib/money";
 import { checkEligibility } from "@/features/matching/eligibility";
 import { loadCandidate } from "@/features/matching/queries";
+import { notifyNewOffer, notifyOfferAccepted } from "@/features/notifications/events";
 import { DomainError } from "@/features/requests/errors";
 import { applyTransition } from "@/features/requests/transition";
 import {
@@ -145,6 +146,8 @@ export async function submitOffer(params: {
     },
     ip,
   });
+
+  notifyNewOffer(offerId);
 
   return { offerId };
 }
@@ -334,6 +337,7 @@ export async function acceptOffer(params: AcceptOfferParams): Promise<{ alreadyA
       metadata: { offerId, actor, commission },
       ip,
     });
+    notifyOfferAccepted(requestId);
   }
 
   return result;

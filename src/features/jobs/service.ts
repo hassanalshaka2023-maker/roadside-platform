@@ -18,6 +18,14 @@ import { audit } from "@/lib/audit";
 import { prisma } from "@/lib/db";
 import { loggerFor } from "@/lib/logger";
 import { commissionFor, sumSyp } from "@/lib/money";
+import {
+  notifyCompletionAnswered,
+  notifyExtraAnswered,
+  notifyExtraProposed,
+  notifyJobProgress,
+  notifyProviderWithdrew,
+  notifyRequestSearching,
+} from "@/features/notifications/events";
 import { DomainError } from "@/features/requests/errors";
 import { releaseBooking } from "@/features/requests/service";
 import type { RequestStatusName } from "@/features/requests/state-machine";
@@ -87,6 +95,8 @@ export async function advanceJob(params: {
   });
 
   await auditStatus(providerUserId, requestId, from, to, "ASSIGNED_PROVIDER", undefined, ip);
+
+  notifyJobProgress(requestId, to);
 }
 
 /** "I'll be there in N minutes" - updates the ETA without a status change. */
@@ -150,6 +160,9 @@ export async function providerWithdraw(params: {
   });
 
   await auditStatus(providerUserId, requestId, from, to, "ASSIGNED_PROVIDER", { reason }, ip);
+
+  notifyProviderWithdrew(requestId, to === "SEARCHING");
+  if (to === "SEARCHING") notifyRequestSearching(requestId, [providerUserId]);
 }
 
 // ---------------------------------------------------------------------------
@@ -196,6 +209,8 @@ export async function proposeExtraCharge(params: {
     metadata: { requestId: input.requestId, laborSyp: input.laborSyp, partsSyp: input.partsSyp, totalSyp },
     ip,
   });
+
+  notifyExtraProposed(extraId);
 
   return { extraId };
 }
@@ -254,6 +269,8 @@ export async function respondToExtraCharge(params: {
     entityId: extraId,
     ip,
   });
+
+  notifyExtraAnswered(extraId, approve);
 }
 
 // ---------------------------------------------------------------------------
@@ -346,6 +363,8 @@ export async function markJobDone(params: {
     { outcome, finalAmountSyp: result.finalAmountSyp },
     ip,
   );
+
+  notifyJobProgress(requestId, "AWAITING_CONFIRMATION");
 
   return { finalAmountSyp: result.finalAmountSyp };
 }
@@ -485,6 +504,8 @@ export async function confirmCompletion(params: {
 
   log.info({ requestId }, "request completed");
   await auditStatus(customerId, requestId, "AWAITING_CONFIRMATION", "COMPLETED", "CUSTOMER", result, ip);
+
+  notifyCompletionAnswered(requestId, true);
 }
 
 /** The customer disagrees: not done, or not that amount. An admin decides. */
@@ -511,6 +532,8 @@ export async function disputeCompletion(params: {
   });
 
   await auditStatus(customerId, requestId, "AWAITING_CONFIRMATION", "DISPUTED", "CUSTOMER", { reason }, ip);
+
+  notifyCompletionAnswered(requestId, false);
 }
 
 /**

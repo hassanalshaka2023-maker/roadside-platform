@@ -12,10 +12,12 @@
  * - Icons and brand images are cache-first too.
  * - Everything else (server actions, API, private files, map tiles) passes
  *   straight through untouched.
+ * - Push: shows the notification the server sent (built in
+ *   src/features/notifications/messages.ts) and opens its page on tap.
  *
  * Bump VERSION to drop old caches after a change to this file.
  */
-const VERSION = "v1";
+const VERSION = "v2";
 const STATIC_CACHE = `najda-static-${VERSION}`;
 const OFFLINE_URL = "/offline.html";
 
@@ -86,4 +88,48 @@ self.addEventListener("fetch", (event) => {
   if (isCacheableAsset(url)) {
     event.respondWith(cacheFirst(request));
   }
+});
+
+self.addEventListener("push", (event) => {
+  let data = {};
+  try {
+    data = event.data ? event.data.json() : {};
+  } catch {
+    // A malformed payload still gets a generic notification below: browsers
+    // may revoke push for a worker that receives a push and shows nothing.
+  }
+
+  const title = data.title || "نجدة الطريق 24";
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: data.body || "",
+      icon: "/icons/icon-192.png",
+      badge: "/icons/icon-192.png",
+      tag: data.tag,
+      renotify: Boolean(data.tag),
+      dir: "auto",
+      // Same-origin paths only ("//host" would leave the site).
+      data: { url: typeof data.url === "string" && /^\/(?!\/)/.test(data.url) ? data.url : "/" },
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const target = new URL(event.notification.data?.url || "/", self.location.origin).href;
+
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((windows) => {
+      // Reuse an open window of the app rather than stacking new ones.
+      for (const client of windows) {
+        if (new URL(client.url).origin === self.location.origin && "focus" in client) {
+          return client
+            .navigate(target)
+            .then((c) => (c || client).focus())
+            .catch(() => self.clients.openWindow(target));
+        }
+      }
+      return self.clients.openWindow(target);
+    }),
+  );
 });

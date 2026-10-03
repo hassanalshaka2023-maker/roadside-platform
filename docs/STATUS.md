@@ -44,8 +44,30 @@ option for later).
   for 14 days.
 - Links opened inside WhatsApp/Facebook keep their own cookies; installing the
   app (and signing in once inside it) is the fix to tell providers about.
-- Not yet: push notifications from the installed app (needs VAPID keys and a
-  subscription table) - the natural next step for the notifications item below.
+
+## Push notifications (added 2026-10-03)
+
+Web Push through the service worker; works in Chrome/Android in the browser
+or installed, and on iPhone only from the installed app (iOS 16.4+).
+
+- Off unless `VAPID_PUBLIC_KEY` / `VAPID_PRIVATE_KEY` / `VAPID_SUBJECT` are
+  set (generate with `node scripts/generate-secrets.mjs`; never rotate).
+- `PushSubscription` rows are tied to the session that created them: only
+  signed-in devices of ACTIVE users are notified, so logout or suspension
+  silences a device. Dead subscriptions (404/410) are deleted on send.
+- `NotificationToggle` (permission asked only on tap): provider area,
+  customer account page, and the owner's tracking page while it is open.
+- Who gets what (`src/features/notifications/events.ts`, texts in
+  `messages/*.json` under `push`):
+  - providers: new nearby request (same eligibility as the feed, nearest 100,
+    also on restart / reassign / provider drop-out), admin invite, offer
+    accepted, booking cancelled, extra charge answered, completion
+    confirmed or disputed;
+  - customers: new offer, provider on the way / arrived / asking for
+    confirmation, extra charge proposed, provider withdrew, search ended.
+- Sent with `after()` once the response is out; never inside a transaction,
+  never able to fail an action. Lock-screen safe: service, governorate and
+  request code only - no names, phones, plates or pins.
 
 ## Email sign-in (added 2026-09-26)
 
@@ -116,8 +138,9 @@ later by phone creates two accounts.
 
 ## Not done yet (in priority order)
 
-- Notifications (SMS or WhatsApp) to providers on new requests and to customers
-  on new offers. Today both sides rely on auto-refreshing pages.
+- SMS or WhatsApp alerts as a fallback for people who have not turned on push
+  notifications. With push on, pages could refresh far less often (or stop
+  auto-refreshing), which also eases the database-hours limit above.
 - Scheduled jobs: `npm run jobs:sweep` (every minute) and
   `npm run files:cleanup` need cron on the server. Searches also close lazily
   when pages load.
@@ -125,4 +148,5 @@ later by phone creates two accounts.
 - Committed e2e suite (Playwright) and CI.
 - Admin UI to create more admin accounts (today: seed / `.env`). Each admin
   already changes their own email and password at `/admin/account`.
-- Push notifications through the installed PWA; performance pass.
+- Performance pass. Push is in place; SMS/WhatsApp alerts for people who
+  never turn notifications on are still open.

@@ -6,6 +6,8 @@ import { LogoutButton } from "@/features/auth/components/LogoutButton";
 import { Link } from "@/i18n/navigation";
 import { ProviderTabs } from "@/components/layout/ProviderTabs";
 import { InstallAppBanner } from "@/components/pwa/InstallAppBanner";
+import { NotificationToggle } from "@/components/pwa/NotificationToggle";
+import { vapidPublicKey } from "@/features/notifications/push";
 import { requireRole } from "@/lib/auth/current-user";
 
 /**
@@ -54,6 +56,7 @@ export default async function ProviderLayout({
         <h1 className="sr-only">{t("title")}</h1>
         <div className="mx-auto max-w-2xl">
           <InstallAppBanner className="mb-4" />
+          <NotificationToggle publicKey={vapidPublicKey()} audience="provider" className="mb-4" />
           {children}
         </div>
       </main>

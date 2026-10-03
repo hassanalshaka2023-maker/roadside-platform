@@ -1012,5 +1012,80 @@
       "safariOnly": "If you opened the site from a WhatsApp or Facebook link, open it in Safari first, then follow the steps. After installing, sign in once inside the app.",
       "done": "Got it"
     }
+  },
+  "push": {
+    "unknownArea": "Unspecified area",
+    "newRequest": {
+      "title": "New request near you",
+      "body": "{service} · {area}. Open it and send your offer"
+    },
+    "invited": {
+      "title": "An admin invited you to a request",
+      "body": "{service} · {area}. Send an offer if you can take it"
+    },
+    "offerAccepted": {
+      "title": "The customer accepted your offer",
+      "body": "{service} · {code}. Open the job for the address and the customer's number"
+    },
+    "bookingCancelled": {
+      "title": "A booked request was cancelled",
+      "byCustomer": "The customer cancelled request {code}. No need to go",
+      "byAdmin": "An admin removed your booking for request {code}. No need to go"
+    },
+    "extraAnswered": {
+      "approvedTitle": "The customer approved the extra charge",
+      "declinedTitle": "The customer declined the extra charge",
+      "body": "Request {code}"
+    },
+    "completionAnswered": {
+      "confirmedTitle": "The customer confirmed the job is done",
+      "confirmedBody": "Request {code} is complete. Thank you",
+      "disputedTitle": "The customer did not confirm completion",
+      "disputedBody": "Request {code} is being reviewed by an admin"
+    },
+    "newOffer": {
+      "title": "You have a new offer",
+      "body": "{service}: {total}, arriving in about {eta} min"
+    },
+    "onTheWay": {
+      "title": "Your provider is on the way",
+      "body": "Please stay near your car",
+      "bodyEta": "Arriving in about {eta} min"
+    },
+    "arrived": {
+      "title": "Your provider has arrived",
+      "body": "The provider is at your location now"
+    },
+    "awaitingConfirmation": {
+      "title": "Confirm the job is done",
+      "body": "Amount due: {amount}. Open the request to confirm or dispute"
+    },
+    "extraProposed": {
+      "title": "An extra charge needs your approval",
+      "body": "The provider asks for {total} more. Nothing is added without your yes"
+    },
+    "providerWithdrew": {
+      "title": "Your provider cancelled",
+      "searching": "We are looking for another provider now",
+      "cancelled": "The request was cancelled and you owe nothing. You can ask for help again"
+    },
+    "searchEnded": {
+      "expiredTitle": "The search has ended",
+      "expiredBody": "You did not pick an offer. You can search again",
+      "noProviderTitle": "No provider was available",
+      "noProviderBody": "Open the request to search again, or call us"
+    }
+  },
+  "notifications": {
+    "title": "Request notifications",
+    "providerText": "Get an alert on your phone when a new request comes in near you, even with the app closed",
+    "customerText": "Get an alert when a new offer arrives or your provider sets off",
+    "enable": "Turn on notifications",
+    "enabled": "Notifications are on for this device",
+    "disable": "Turn off",
+    "denied": "Notifications are blocked for this site. Allow them in your browser settings and try again",
+    "iosInstallFirst": "On iPhone, notifications work after you add the app to your home screen and open it from its icon",
+    "unsupported": "This browser does not support notifications. Try Chrome or install the app",
+    "failed": "Could not turn on notifications. Check your connection and try again"
   }
 }

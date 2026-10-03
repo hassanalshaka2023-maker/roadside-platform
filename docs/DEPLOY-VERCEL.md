@@ -51,6 +51,8 @@ Generate secrets with `node scripts/generate-secrets.mjs` and paste them.
 | `SESSION_SECRET`, `OTP_HMAC_SECRET`, `ID_HASH_SECRET` | from the script |
 | `FILE_ENCRYPTION_KEYS`, `FILE_ENCRYPTION_ACTIVE_VERSION` | from the script |
 | `CRON_SECRET` | from the script |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY` | from the script. Push notifications stay off without them. Never change them afterwards: new keys silently cancel every phone's subscription |
+| `VAPID_SUBJECT` | `mailto:` + an address you read, e.g. `mailto:the Gmail address` |
 | `RATE_LIMIT_DRIVER` | `postgres` |
 | `SMS_PROVIDER` | `stub` (no SMS gateway yet: phone sign-in is hidden) |
 | `EMAIL_PROVIDER` | `smtp` |
