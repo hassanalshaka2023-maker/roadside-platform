@@ -47,7 +47,8 @@
     "providerPanel": "Provider panel",
     "skipToContent": "Skip to content",
     "menu": "Menu",
-    "myDashboard": "My dashboard"
+    "myDashboard": "My dashboard",
+    "myApplication": "My application"
   },
   "home": {
     "heroTitle": "Car broke down? Get help from where you are",

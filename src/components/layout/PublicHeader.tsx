@@ -1,10 +1,11 @@
-import { Handshake, LayoutDashboard, Menu, X } from "lucide-react";
+import { ClipboardList, Handshake, LayoutDashboard, Menu, X } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 
 import { Logo } from "@/components/ui/Logo";
 import { LogoutButton } from "@/features/auth/components/LogoutButton";
 import { Link } from "@/i18n/navigation";
 import { getCurrentUser } from "@/lib/auth/current-user";
+import { prisma } from "@/lib/db";
 import { LanguageSwitcher } from "./LanguageSwitcher";
 import { MobileMenu } from "./MobileMenu";
 
@@ -18,15 +19,21 @@ const secondaryLink =
  *
  * The main button is "Join as a provider": "request help" already leads the
  * home page, and repeating it in the header put it on screen twice. A
- * signed-in provider gets "My dashboard" instead.
+ * signed-in provider gets "My dashboard" instead, and someone who has
+ * already applied (not approved yet) gets "My application".
  */
 export async function PublicHeader() {
   const [t, user] = await Promise.all([getTranslations("nav"), getCurrentUser()]);
   const isProvider = user?.role === "PROVIDER";
+  const hasApplied =
+    user?.role === "CUSTOMER" &&
+    (await prisma.providerApplication.count({ where: { userId: user.id } }).catch(() => 0)) > 0;
 
   const primary = isProvider
     ? { href: "/provider", label: t("myDashboard"), Icon: LayoutDashboard }
-    : { href: "/apply", label: t("joinAsProvider"), Icon: Handshake };
+    : hasApplied
+      ? { href: "/apply", label: t("myApplication"), Icon: ClipboardList }
+      : { href: "/apply", label: t("joinAsProvider"), Icon: Handshake };
 
   const links = (
     <>
