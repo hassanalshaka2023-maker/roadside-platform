@@ -1020,6 +1020,14 @@
       "step3": "Tap “Add” and the Najdat Al-Tariq icon appears on your screen",
       "safariOnly": "If you opened the site from a WhatsApp or Facebook link, open it in Safari first, then follow the steps. After installing, sign in once inside the app.",
       "done": "Got it"
+    },
+    "installButton": "Install the app",
+    "manual": {
+      "title": "Install the app on your phone",
+      "step1": "Open the browser menu (the three dots ⋮ at the top)",
+      "step2": "Choose “Install app” or “Add to Home screen”",
+      "step3": "Tap “Install” and the Najdat Al-Tariq icon appears on your screen",
+      "inAppBrowser": "If you opened the site from a WhatsApp or Facebook link, open it in Chrome first, then follow the steps."
     }
   },
   "push": {

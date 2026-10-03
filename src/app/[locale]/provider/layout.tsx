@@ -7,6 +7,7 @@ import { LogoutButton } from "@/features/auth/components/LogoutButton";
 import { Link } from "@/i18n/navigation";
 import { ProviderTabs } from "@/components/layout/ProviderTabs";
 import { InstallAppBanner } from "@/components/pwa/InstallAppBanner";
+import { InstallAppButton } from "@/components/pwa/InstallAppButton";
 import { NotificationToggle } from "@/components/pwa/NotificationToggle";
 import { vapidPublicKey } from "@/features/notifications/push";
 import { requireRole } from "@/lib/auth/current-user";
@@ -56,7 +57,7 @@ export default async function ProviderLayout({
       </header>
       <div className="hazard-divider" />
 
-      <main className="flex-1 bg-gray-50 p-4">
+      <main className="flex-1 bg-gray-50 p-4 pb-24">
         <h1 className="sr-only">{t("title")}</h1>
         <div className="mx-auto max-w-2xl">
           <InstallAppBanner className="mb-4" />
@@ -64,6 +65,7 @@ export default async function ProviderLayout({
           {children}
         </div>
       </main>
+      <InstallAppButton />
     </div>
   );
 }

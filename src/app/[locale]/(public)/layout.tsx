@@ -3,6 +3,7 @@ import { getTranslations } from "next-intl/server";
 import { PublicFooter } from "@/components/layout/PublicFooter";
 import { PublicHeader } from "@/components/layout/PublicHeader";
 import { WhatsAppButton } from "@/components/layout/WhatsAppButton";
+import { InstallAppButton } from "@/components/pwa/InstallAppButton";
 import { ToastProvider } from "@/components/ui/Toast";
 
 export default async function PublicLayout({
@@ -26,6 +27,7 @@ export default async function PublicLayout({
         </main>
         <PublicFooter />
         <WhatsAppButton />
+        <InstallAppButton />
       </div>
     </ToastProvider>
   );
