@@ -15,6 +15,12 @@ without losing context.
   providers `commissionNoticeDays` (default 14) in advance and applies only to
   requests accepted after the effective date.
 - Money is stored as **integer Syrian pounds**.
+- **What candidate providers see (2026-10-03).** Governorate, the
+  neighbourhood and nearest landmark the customer typed, approximate
+  distance, towing destination, car and problem - enough to price the job.
+  The exact map pin, photos, plate and the customer's name and phone stay
+  hidden until the customer accepts that provider's offer. The request form
+  tells the customer this under the location fields.
 
 ## Email sign-in (added 2026-09-26)
 

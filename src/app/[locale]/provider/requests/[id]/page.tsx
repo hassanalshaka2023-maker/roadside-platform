@@ -15,9 +15,9 @@ import { prisma } from "@/lib/db";
 import { governorateName } from "@/lib/geo";
 
 /**
- * An open request as a CANDIDATE provider sees it: area, approximate
- * distance, the car and the problem - never the exact pin, address, photos
- * or the customer. Reachable only if this provider is eligible right now;
+ * An open request as a CANDIDATE provider sees it: governorate, neighbourhood
+ * and landmark as typed by the customer, approximate distance, destination,
+ * the car and the problem - never the exact pin, photos or the customer. Reachable only if this provider is eligible right now;
  * otherwise it simply does not exist for them.
  */
 export default async function ProviderRequestPage({ params }: { params: Promise<{ locale: string; id: string }> }) {
@@ -58,15 +58,22 @@ export default async function ProviderRequestPage({ params }: { params: Promise<
         <CardBody>
           <dl className="text-sm">
             <Field label={t("wizard.governorate")}>{governorateName(item.governorate, locale)}</Field>
+            {item.areaText ? <Field label={t("wizard.address")}>{item.areaText}</Field> : null}
+            {item.landmark ? <Field label={t("wizard.landmark")}>{item.landmark}</Field> : null}
             {item.approxDistanceKm !== null ? (
               <Field label={t("provider.distanceLabel")}>{t("provider.distance", { km: item.approxDistanceKm })}</Field>
             ) : null}
+            {item.destinationText ? <Field label={t("provider.destinationLabel")}>{item.destinationText}</Field> : null}
             {item.towDistanceKm !== null ? (
               <Field label={t("provider.towDistanceLabel")}>{t("provider.towDistance", { km: item.towDistanceKm })}</Field>
             ) : null}
             <Field label={t("wizard.car")}>
-              {[item.carMake, item.carModel, item.carYear].filter(Boolean).join(" ") || "—"}
-              {item.carCategory ? ` · ${t(`vehicleCategory.${item.carCategory}`)}` : ""}
+              {[
+                [item.carMake, item.carModel, item.carYear].filter(Boolean).join(" "),
+                item.carCategory ? t(`vehicleCategory.${item.carCategory}`) : "",
+              ]
+                .filter(Boolean)
+                .join(" · ") || "—"}
             </Field>
             {item.vehicleCanRoll !== null ? (
               <Field label={t("wizard.canRoll")}>{t(item.vehicleCanRoll ? "wizard.canRoll_yes" : "wizard.canRoll_no")}</Field>

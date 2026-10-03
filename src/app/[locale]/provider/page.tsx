@@ -167,9 +167,13 @@ export default async function ProviderDashboardPage({ params }: { params: Promis
                   <p className="mt-1 flex items-center gap-1 text-sm text-gray-600">
                     <MapPin aria-hidden="true" className="h-4 w-4" />
                     {governorateName(item.governorate, locale)}
+                    {item.areaText ? ` - ${item.areaText}` : ""}
                     {item.approxDistanceKm !== null ? ` · ${t("provider.distance", { km: item.approxDistanceKm })}` : ""}
                     {item.towDistanceKm !== null ? ` · ${t("provider.towDistance", { km: item.towDistanceKm })}` : ""}
                   </p>
+                  {item.destinationText ? (
+                    <p className="mt-1 text-sm font-bold">{t("provider.destinationShort", { place: item.destinationText })}</p>
+                  ) : null}
                   <p className="mt-1 text-sm">
                     {[item.carMake, item.carModel, item.carYear].filter(Boolean).join(" ")}
                     {item.problemUnknown ? ` — ${t("wizard.dontKnow")}` : item.problemDescription ? ` — ${item.problemDescription.slice(0, 80)}` : ""}

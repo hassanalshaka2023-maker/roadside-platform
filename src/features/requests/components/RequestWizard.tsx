@@ -451,6 +451,16 @@ export function RequestWizard({
             </Select>
           </FormField>
 
+          <FormField htmlFor="addressText" label={t("wizard.address")} hint={t("wizard.addressHint")} optionalLabel={t("common.optional")}>
+            <Input
+              id="addressText"
+              value={draft.addressText}
+              maxLength={300}
+              onChange={(e) => update({ addressText: e.target.value })}
+              {...fieldAria("addressText", { hint: t("wizard.addressHint") })}
+            />
+          </FormField>
+
           <FormField
             htmlFor="landmarkText"
             label={t("wizard.landmark")}
@@ -468,9 +478,8 @@ export function RequestWizard({
             />
           </FormField>
 
-          <FormField htmlFor="addressText" label={t("wizard.address")} optionalLabel={t("common.optional")}>
-            <Input id="addressText" value={draft.addressText} maxLength={300} onChange={(e) => update({ addressText: e.target.value })} />
-          </FormField>
+
+          <p className="rounded-lg bg-gray-50 p-3 text-xs leading-relaxed text-gray-600">{t("wizard.locationVisibility")}</p>
 
           <StepNav
             onBack={() => goTo("service")}

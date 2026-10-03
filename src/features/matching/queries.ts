@@ -52,8 +52,10 @@ export async function loadCandidate(db: Db, userId: string): Promise<ProviderCan
  * Open requests this provider may bid on, nearest first.
  *
  * Shows the AREA (governorate) and an APPROXIMATE distance only. The exact
- * pin, address, landmark, photos and the customer's name and phone stay
- * hidden until this provider is booked.
+ * pin, photos, plate and the customer's name and phone stay hidden until this
+ * provider is booked. What the customer wrote about the area (neighbourhood,
+ * nearest landmark) and the towing destination ARE shown: a provider cannot
+ * price a job without them, and the wizard tells the customer so.
  */
 export async function listOpenRequestsForProvider(userId: string) {
   const candidate = await loadCandidate(prisma, userId);
@@ -98,6 +100,9 @@ export async function listOpenRequestsForProvider(userId: string) {
       lat: true,
       lng: true,
       governorate: true,
+      addressText: true,
+      landmarkText: true,
+      destinationText: true,
       carMake: true,
       carModel: true,
       carYear: true,
@@ -155,6 +160,9 @@ export async function listOpenRequestsForProvider(userId: string) {
       id: row.id,
       publicCode: row.publicCode,
       governorate: row.governorate,
+      areaText: row.addressText || null,
+      landmark: row.landmarkText || null,
+      destinationText: row.destinationText || null,
       approxDistanceKm:
         candidate.lat !== null && candidate.lng !== null
           ? approximateDistanceKm({ lat: candidate.lat, lng: candidate.lng }, row)
@@ -185,6 +193,11 @@ export interface FeedItem {
   id: string;
   publicCode: string;
   governorate: string | null;
+  /** Neighbourhood as the customer typed it (ServiceRequest.addressText). */
+  areaText: string | null;
+  landmark: string | null;
+  /** Where the car goes (towing). */
+  destinationText: string | null;
   approxDistanceKm: number | null;
   towDistanceKm: number | null;
   serviceType: { nameAr: string; nameEn: string; slug: string; requiresDestination: boolean };

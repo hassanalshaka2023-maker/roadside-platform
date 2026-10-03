@@ -256,7 +256,7 @@
     "chooseGovernorate": "Choose governorate",
     "landmark": "Nearest landmark",
     "landmarkHint": "e.g. opposite the mosque, next to the petrol station",
-    "address": "Address",
+    "address": "Area or neighbourhood",
     "detailsTitle": "Car and problem",
     "carMake": "Make",
     "carMakePlaceholder": "e.g. Kia, Hyundai",
@@ -286,7 +286,9 @@
     "phoneTitle": "Your phone number",
     "phoneHint": "We will send you a code. Your number is only shown to the provider you accept.",
     "idWhy": "Required by platform settings for a first request. Stored encrypted; the provider never sees it.",
-    "contactHintBoth": "We send a code to your phone or email. Your number is only shown to the provider whose offer you accept."
+    "contactHintBoth": "We send a code to your phone or email. Your number is only shown to the provider whose offer you accept.",
+    "addressHint": "e.g. Barzeh, Mezzeh, Airport Road",
+    "locationVisibility": "Nearby providers see the area, nearest landmark and towing destination so they can price the job. Your exact map location and phone number are shown only to the provider whose offer you accept."
   },
   "validation": {
     "INVALID_INPUT": "Some details are not valid. Check them and try again",
@@ -592,7 +594,7 @@
     "distanceLabel": "Approximate distance",
     "towDistanceLabel": "Tow distance",
     "postedAt": "Requested",
-    "privacyNote": "You see the exact location and the customer's number only if they accept your offer.",
+    "privacyNote": "The exact map location and the customer's phone are shown to you only if they accept your offer.",
     "offerFull": "This request already has the maximum number of offers.",
     "offerFormTitle": "Send your offer",
     "amountsHint": "Amounts in Syrian pounds, whole numbers only. The total is calculated for you.",
@@ -668,7 +670,9 @@
       "workingHours": "Working hours",
       "baseHint": "Change it if you move to another base.",
       "save": "Save"
-    }
+    },
+    "destinationLabel": "Destination",
+    "destinationShort": "To: {place}"
   },
   "admin": {
     "title": "Admin panel",

@@ -516,14 +516,16 @@ describe("access between users", () => {
     );
   });
 
-  it("hides exact location, address and customer identity from candidate providers", async () => {
+  it("shows candidates the area the customer typed, but never the pin or the customer", async () => {
     const customer = await makeUser();
     const provider = await makeApprovedProvider(admin.id);
-    await makeRequest(customer.id, services.mechanic.id, { landmarkText: "مقابل الجامع", addressText: "شارع 1" });
+    await makeRequest(customer.id, services.mechanic.id, { landmarkText: "مقابل الجامع", addressText: "برزة" });
     const { items } = await listOpenRequestsForProvider(provider.id);
     expect(items).toHaveLength(1);
     const item = items[0] as unknown as Record<string, unknown>;
-    for (const hidden of ["lat", "lng", "landmarkText", "addressText", "customerId", "photoIds", "plateNumber"]) {
+    expect(item.areaText).toBe("برزة");
+    expect(item.landmark).toBe("مقابل الجامع");
+    for (const hidden of ["lat", "lng", "customerId", "customer", "contactPhone", "photoIds", "plateNumber"]) {
       expect(item).not.toHaveProperty(hidden);
     }
     expect(item.approxDistanceKm).toBeGreaterThanOrEqual(1);
