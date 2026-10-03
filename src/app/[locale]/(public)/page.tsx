@@ -12,12 +12,14 @@ import {
   Siren,
   type LucideIcon,
 } from "lucide-react";
+import { redirect } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { serviceIcon } from "@/features/services/icons";
 import { effectiveCommission, readSetting } from "@/features/settings/platform";
 import { getBusinessPhones } from "@/features/settings/queries";
 import { Link } from "@/i18n/navigation";
+import { getCurrentUser } from "@/lib/auth/current-user";
 import { prisma } from "@/lib/db";
 import { loggerFor } from "@/lib/logger";
 import { normalizeSyrianPhone, toLocalFormat } from "@/lib/phone";
@@ -57,6 +59,9 @@ async function loadServices(locale: string): Promise<ServiceCard[] | null> {
 export default async function HomePage({ params }: { params: Promise<{ locale: string }> }) {
   const { locale } = await params;
   setRequestLocale(locale);
+
+  // A signed-in provider has no use for the customer home page.
+  if ((await getCurrentUser())?.role === "PROVIDER") redirect(`/${locale}/provider`);
 
   const [t, services, policy, phones] = await Promise.all([
     getTranslations(),

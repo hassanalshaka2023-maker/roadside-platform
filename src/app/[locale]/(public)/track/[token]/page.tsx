@@ -11,8 +11,11 @@ import { vapidPublicKey } from "@/features/notifications/push";
 import { isValidTrackingToken } from "@/features/requests/schemas";
 import { getByTrackingToken, getStatusHistory, sweepQuietly } from "@/features/requests/service";
 import { isTerminal, type RequestStatusName } from "@/features/requests/state-machine";
+import { noOfferHelpDue } from "@/features/requests/no-offer-help";
 import { readSetting } from "@/features/settings/platform";
+import { isWhatsappEnabled } from "@/features/settings/queries";
 import { getCurrentUser } from "@/lib/auth/current-user";
+import { normalizeSyrianPhone, toLocalFormat } from "@/lib/phone";
 
 /** A tracking URL is a secret: keep it out of search engines. */
 export const metadata: Metadata = { robots: { index: false, follow: false } };
@@ -42,12 +45,31 @@ export default async function TrackPage({
   const isOwner = viewer?.id === request.customerId;
   const status = request.status as RequestStatusName;
 
-  const [history, offers, extras, policy] = await Promise.all([
+  const [history, offers, extras, policy, hotline, helpMinutes, whatsapp] = await Promise.all([
     getStatusHistory(request.id),
     isOwner && status === "SEARCHING" ? listOffersForRequest(request.id) : Promise.resolve([]),
     isOwner ? listExtras(request.id) : Promise.resolve([]),
     readSetting("cancellationPolicy"),
+    readSetting("hotlinePhone"),
+    readSetting("noOfferHelpMinutes"),
+    isWhatsappEnabled(),
   ]);
+
+  // No offer after a few minutes: give the customer a person to call. The
+  // page refreshes itself every 20 s, so the card appears on its own.
+  const hotlineNumber = normalizeSyrianPhone(hotline);
+  const noOfferHelp =
+    isOwner &&
+    hotlineNumber.ok &&
+    noOfferHelpDue({
+      status,
+      offerCount: offers.length,
+      searchStartedAt: request.searchStartedAt,
+      createdAt: request.createdAt,
+      minutes: helpMinutes,
+    })
+      ? { e164: hotlineNumber.phone, display: toLocalFormat(hotlineNumber.phone), whatsapp }
+      : null;
 
   const currentLocale = await getLocale();
 
@@ -64,6 +86,7 @@ export default async function TrackPage({
         extras={extras}
         isOwner={isOwner}
         cancellationPolicy={currentLocale === "ar" ? policy.ar : policy.en}
+        noOfferHelp={noOfferHelp}
       />
     </div>
   );

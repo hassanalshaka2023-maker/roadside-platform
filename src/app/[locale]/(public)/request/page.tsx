@@ -1,3 +1,4 @@
+import { redirect } from "next/navigation";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 
 import { Notice } from "@/components/ui/States";
@@ -60,6 +61,9 @@ export default async function RequestPage({
     loadServices(locale),
     readSetting("customerIdMode"),
   ]);
+
+  // The provider app is for working: "request help" belongs to customers.
+  if (user?.role === "PROVIDER") redirect(`/${locale}/provider`);
 
   const preselected = services?.find((s) => s.slug === serviceSlug)?.id;
 

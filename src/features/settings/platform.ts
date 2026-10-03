@@ -77,6 +77,10 @@ const SETTING_SCHEMAS = {
   customerIdMode: z.enum(["NEVER", "FIRST_REQUEST_ONLY", "ALWAYS"]),
   businessPhones: z.array(z.string().regex(/^0\d{9}$/)).max(5),
   whatsappEnabled: z.boolean(),
+  /** The number a customer is told to call when no offer has come in yet. */
+  hotlinePhone: z.string().regex(/^0\d{9}$/),
+  /** Minutes without any offer before the customer sees "call us". */
+  noOfferHelpMinutes: z.number().int().min(1).max(60),
 } as const;
 
 export type SettingKey = keyof typeof SETTING_SCHEMAS;
@@ -96,6 +100,8 @@ export const SETTING_DEFAULTS: { [K in SettingKey]: SettingValue<K> } = {
   customerIdMode: "NEVER",
   businessPhones: [],
   whatsappEnabled: true,
+  hotlinePhone: "0981488760",
+  noOfferHelpMinutes: 5,
 };
 
 export const SETTING_KEYS = Object.keys(SETTING_SCHEMAS) as SettingKey[];

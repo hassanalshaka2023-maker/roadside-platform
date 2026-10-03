@@ -46,7 +46,8 @@
     "adminPanel": "Admin panel",
     "providerPanel": "Provider panel",
     "skipToContent": "Skip to content",
-    "menu": "Menu"
+    "menu": "Menu",
+    "myDashboard": "My dashboard"
   },
   "home": {
     "heroTitle": "Car broke down? Get help from where you are",
@@ -410,7 +411,11 @@
     "details": "Request details",
     "cancel": "Cancel request",
     "cancelReason": "Reason (optional)",
-    "confirmCancel": "Yes, cancel the request"
+    "confirmCancel": "Yes, cancel the request",
+    "noOfferHelpTitle": "No offer yet?",
+    "noOfferHelpText": "Call us directly and we will follow up your request and send the nearest available provider",
+    "noOfferHelpCall": "Call now",
+    "noOfferHelpWhatsapp": "Message us on WhatsApp"
   },
   "offer": {
     "callout": "Callout and inspection",
@@ -825,7 +830,11 @@
     "accountConfirmPassword": "Repeat the new password",
     "accountCurrentPassword": "Current password (required to confirm)",
     "accountSessionsNote": "Saving signs you out on every other device; you stay signed in here.",
-    "accountSaved": "Saved. Use the new details next time you sign in"
+    "accountSaved": "Saved. Use the new details next time you sign in",
+    "hotlinePhone": "Customer hotline number",
+    "hotlinePhoneHint": "Shown to a customer who has no offer yet. 10 digits starting with 0",
+    "noOfferHelpMinutes": "Show the hotline after (minutes)",
+    "noOfferHelpMinutesHint": "How many minutes without offers before we tell the customer to call us"
   },
   "errors": {
     "notFoundTitle": "Page not found",

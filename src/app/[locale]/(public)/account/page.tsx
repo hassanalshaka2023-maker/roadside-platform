@@ -48,7 +48,11 @@ export default async function AccountPage({ params }: { params: Promise<{ locale
       <p className="mb-6 mt-2 text-sm text-gray-600">{t("account.subtitle")}</p>
 
       <InstallAppBanner className="mb-4" />
-      <NotificationToggle publicKey={vapidPublicKey()} audience="customer" className="mb-4" />
+      <NotificationToggle
+        publicKey={vapidPublicKey()}
+        audience={user.role === "PROVIDER" ? "provider" : "customer"}
+        className="mb-4"
+      />
       {user.role !== "ADMIN" ? (
         <Link
           href="/account/password"
@@ -95,6 +99,8 @@ export default async function AccountPage({ params }: { params: Promise<{ locale
         </CardBody>
       </Card>
 
+      {/* "My requests" is the customer side; a provider's work lives in /provider. */}
+      {user.role === "PROVIDER" ? null : (
       <Card className="mt-6">
         <CardHeader className="flex items-center justify-between">
           <CardTitle>{t("account.myRequests")}</CardTitle>
@@ -137,6 +143,7 @@ export default async function AccountPage({ params }: { params: Promise<{ locale
           )}
         </CardBody>
       </Card>
+      )}
     </div>
   );
 }

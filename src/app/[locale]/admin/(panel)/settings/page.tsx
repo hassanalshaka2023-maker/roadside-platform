@@ -36,7 +36,7 @@ export default async function AdminSettingsPage({ params }: { params: Promise<{ 
   const user = await requirePermission(locale, "manageSettings", "admin");
   const [t, format] = await Promise.all([getTranslations(), getFormatter()]);
 
-  const [matching, noticeDays, policy, phones, whatsapp, idMode, cancellation, services] = await Promise.all([
+  const [matching, noticeDays, policy, phones, whatsapp, idMode, cancellation, services, hotline, noOfferMinutes] = await Promise.all([
     readMatchingSettings(),
     readSetting("commissionNoticeDays"),
     readSetting("commissionPolicy"),
@@ -45,6 +45,8 @@ export default async function AdminSettingsPage({ params }: { params: Promise<{ 
     readSetting("customerIdMode"),
     readSetting("cancellationPolicy"),
     prisma.serviceType.findMany({ orderBy: { sortOrder: "asc" }, select: { id: true, nameAr: true, nameEn: true, isActive: true } }),
+    readSetting("hotlinePhone"),
+    readSetting("noOfferHelpMinutes"),
   ]);
   const current = effectiveCommission(policy);
   const earliestInput = earliestCommissionDate(noticeDays);
@@ -144,6 +146,18 @@ export default async function AdminSettingsPage({ params }: { params: Promise<{ 
               <input type="checkbox" name="whatsappEnabled" defaultChecked={whatsapp} className="h-5 w-5 accent-ink" />
               {t("admin.whatsappEnabled")}
             </label>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <label className="flex flex-col gap-1.5 text-sm font-bold">
+                {t("admin.hotlinePhone")}
+                <Input name="hotlinePhone" dir="ltr" inputMode="tel" className="numeric" defaultValue={hotline} maxLength={10} />
+                <span className="text-xs font-normal text-gray-500">{t("admin.hotlinePhoneHint")}</span>
+              </label>
+              <label className="flex flex-col gap-1.5 text-sm font-bold">
+                {t("admin.noOfferHelpMinutes")}
+                <Input name="noOfferHelpMinutes" dir="ltr" inputMode="numeric" className="numeric" defaultValue={noOfferMinutes} maxLength={2} />
+                <span className="text-xs font-normal text-gray-500">{t("admin.noOfferHelpMinutesHint")}</span>
+              </label>
+            </div>
             <label className="flex flex-col gap-1.5 text-sm font-bold">
               {t("admin.customerIdMode")}
               <Select name="customerIdMode" defaultValue={idMode}>

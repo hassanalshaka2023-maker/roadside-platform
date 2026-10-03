@@ -46,7 +46,8 @@
     "adminPanel": "لوحة الإدارة",
     "providerPanel": "لوحة مقدّم الخدمة",
     "skipToContent": "تخطَّ إلى المحتوى",
-    "menu": "القائمة"
+    "menu": "القائمة",
+    "myDashboard": "لوحتي"
   },
   "home": {
     "heroTitle": "تعطّلت سيارتك؟ اطلب المساعدة من مكانك",
@@ -410,7 +411,11 @@
     "details": "تفاصيل الطلب",
     "cancel": "إلغاء الطلب",
     "cancelReason": "سبب الإلغاء (اختياري)",
-    "confirmCancel": "نعم، ألغِ الطلب"
+    "confirmCancel": "نعم، ألغِ الطلب",
+    "noOfferHelpTitle": "لم يصلك عرض بعد؟",
+    "noOfferHelpText": "اتصل بنا مباشرة وسنتابع طلبك ونرسل لك أقرب مقدّم خدمة متاح",
+    "noOfferHelpCall": "اتصل الآن",
+    "noOfferHelpWhatsapp": "راسلنا على واتساب"
   },
   "offer": {
     "callout": "رسوم الوصول والكشف",
@@ -825,7 +830,11 @@
     "accountConfirmPassword": "أعد كتابة كلمة المرور الجديدة",
     "accountCurrentPassword": "كلمة المرور الحالية (مطلوبة للتأكيد)",
     "accountSessionsNote": "بعد الحفظ سيُسجَّل خروجك من كل الأجهزة الأخرى، وتبقى داخلاً على هذا الجهاز.",
-    "accountSaved": "تم الحفظ. استخدم البيانات الجديدة في المرة القادمة"
+    "accountSaved": "تم الحفظ. استخدم البيانات الجديدة في المرة القادمة",
+    "hotlinePhone": "رقم الطوارئ للعملاء",
+    "hotlinePhoneHint": "يظهر للعميل إذا لم يصله أي عرض. 10 أرقام يبدأ بـ 0",
+    "noOfferHelpMinutes": "إظهار رقم الطوارئ بعد (دقائق)",
+    "noOfferHelpMinutesHint": "كم دقيقة بلا عروض قبل أن نقول للعميل «اتصل بنا»"
   },
   "errors": {
     "notFoundTitle": "الصفحة غير موجودة",

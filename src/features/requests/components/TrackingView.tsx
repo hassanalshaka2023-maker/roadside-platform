@@ -50,6 +50,7 @@ import {
   type RequestStatusName,
 } from "../state-machine";
 import { ContactNumber, contactNumberOf } from "@/components/ui/ContactNumber";
+import { WhatsAppIcon } from "@/components/ui/WhatsAppIcon";
 import { cn } from "@/lib/cn";
 
 /** The status card's look: one icon per stage, one colour per outcome. */
@@ -93,6 +94,7 @@ export async function TrackingView({
   extras,
   isOwner,
   cancellationPolicy,
+  noOfferHelp = null,
 }: {
   request: CustomerRequest;
   history: StatusHistoryEntry[];
@@ -100,6 +102,9 @@ export async function TrackingView({
   extras: Extra[];
   isOwner: boolean;
   cancellationPolicy: string;
+  /** Set once the search has gone a few minutes without any offer:
+   *  the number to call (and WhatsApp) for a person to help. */
+  noOfferHelp?: { e164: string; display: string; whatsapp: boolean } | null;
 }) {
   const t = await getTranslations();
   const locale = await getLocale();
@@ -171,7 +176,31 @@ export async function TrackingView({
             <CardTitle>{t("tracking.offersTitle", { count: offers.length })}</CardTitle>
           </CardHeader>
           <CardBody className="flex flex-col gap-4">
-            {offers.length === 0 ? (
+            {offers.length === 0 && noOfferHelp ? (
+              <div role="alert" className="flex flex-col gap-3 rounded-xl border-2 border-brand-red bg-brand-red-soft p-4 text-center">
+                <p className="text-lg font-extrabold">{t("tracking.noOfferHelpTitle")}</p>
+                <p className="text-gray-700">{t("tracking.noOfferHelpText")}</p>
+                <a
+                  href={`tel:${noOfferHelp.e164}`}
+                  className="inline-flex min-h-[52px] items-center justify-center gap-2 rounded-lg bg-brand-red px-6 text-lg font-extrabold text-white hover:bg-brand-red-dark"
+                >
+                  <Phone aria-hidden="true" className="h-5 w-5" />
+                  {t("tracking.noOfferHelpCall")}
+                  <bdi dir="ltr" className="numeric">{noOfferHelp.display}</bdi>
+                </a>
+                {noOfferHelp.whatsapp ? (
+                  <a
+                    href={`https://wa.me/${noOfferHelp.e164.replace("+", "")}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex min-h-touch items-center justify-center gap-2 rounded-lg bg-success px-6 font-bold text-white"
+                  >
+                    <WhatsAppIcon className="h-5 w-5" />
+                    {t("tracking.noOfferHelpWhatsapp")}
+                  </a>
+                ) : null}
+              </div>
+            ) : offers.length === 0 ? (
               <p className="text-center text-gray-600">{t("tracking.noOffersYet")}</p>
             ) : (
               offers.map((offer) => {

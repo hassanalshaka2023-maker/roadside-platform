@@ -1,4 +1,4 @@
-import { Menu, Siren, X } from "lucide-react";
+import { LayoutDashboard, Menu, Siren, X } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 
 import { Logo } from "@/components/ui/Logo";
@@ -15,15 +15,25 @@ const secondaryLink =
  * One row on every screen: logo, the "get help" button, and - on phones - a
  * menu for the rest. The menu is a <details> element, so it opens even
  * before the page has hydrated on a slow phone.
+ *
+ * A signed-in provider sees none of the customer calls to action ("request
+ * help", "join us"): their main button goes back to their dashboard.
  */
 export async function PublicHeader() {
   const [t, user] = await Promise.all([getTranslations("nav"), getCurrentUser()]);
+  const isProvider = user?.role === "PROVIDER";
+
+  const primary = isProvider
+    ? { href: "/provider", label: t("myDashboard"), Icon: LayoutDashboard }
+    : { href: "/request", label: t("requestService"), Icon: Siren };
 
   const links = (
     <>
-      <Link href="/apply" className={secondaryLink}>
-        {t("joinAsProvider")}
-      </Link>
+      {isProvider ? null : (
+        <Link href="/apply" className={secondaryLink}>
+          {t("joinAsProvider")}
+        </Link>
+      )}
       {user ? (
         <>
           <Link href="/account" className={secondaryLink}>
@@ -42,7 +52,7 @@ export async function PublicHeader() {
   return (
     <header className="dark-surface sticky top-0 z-30 bg-ink text-white">
       <div className="container flex items-center justify-between gap-2 py-1.5">
-        <Link href="/" className="inline-flex shrink-0 items-center" aria-label={t("home")}>
+        <Link href={isProvider ? "/provider" : "/"} className="inline-flex shrink-0 items-center" aria-label={t("home")}>
           <Logo priority />
         </Link>
 
@@ -51,22 +61,22 @@ export async function PublicHeader() {
           {links}
           <LanguageSwitcher onDark />
           <Link
-            href="/request"
+            href={primary.href}
             className="inline-flex min-h-touch items-center gap-2 rounded-lg bg-brand-yellow px-4 text-sm font-extrabold text-ink hover:bg-brand-yellow-hover"
           >
-            <Siren aria-hidden="true" className="h-4 w-4" />
-            {t("requestService")}
+            <primary.Icon aria-hidden="true" className="h-4 w-4" />
+            {primary.label}
           </Link>
         </nav>
 
         {/* Phones */}
         <div className="flex items-center gap-1 md:hidden">
           <Link
-            href="/request"
+            href={primary.href}
             className="inline-flex min-h-touch items-center gap-1.5 rounded-lg bg-brand-yellow px-3 text-sm font-extrabold text-ink hover:bg-brand-yellow-hover"
           >
-            <Siren aria-hidden="true" className="h-4 w-4" />
-            {t("requestService")}
+            <primary.Icon aria-hidden="true" className="h-4 w-4" />
+            {primary.label}
           </Link>
           <MobileMenu className="group">
             <summary

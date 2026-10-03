@@ -209,6 +209,18 @@ export async function updateContactSettingsAction(_prev: ActionResult, formData:
     await writeSetting("businessPhones", parsedPhones, user.id, ip);
     await writeSetting("whatsappEnabled", formBool(formData, "whatsappEnabled"), user.id, ip);
     await writeSetting(
+      "hotlinePhone",
+      z.string().trim().regex(/^0\d{9}$/, "INVALID_PHONE_LIST").parse(formString(formData, "hotlinePhone")),
+      user.id,
+      ip,
+    );
+    await writeSetting(
+      "noOfferHelpMinutes",
+      z.number().int().min(1, "INVALID_AMOUNT").max(60, "INVALID_AMOUNT").parse(formInt(formData, "noOfferHelpMinutes")),
+      user.id,
+      ip,
+    );
+    await writeSetting(
       "customerIdMode",
       z.enum(["NEVER", "FIRST_REQUEST_ONLY", "ALWAYS"]).parse(formString(formData, "customerIdMode")),
       user.id,

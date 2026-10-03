@@ -65,6 +65,16 @@ option for later).
   An app installed before this change may keep the old start page until
   Chrome refreshes the manifest (or it is reinstalled).
 
+## Provider app focus, hotline prompt (added 2026-10-04)
+
+- A signed-in provider never sees the customer side: home and `/request`
+  redirect to `/provider`, the header's main button is "My dashboard", and
+  "Join us" / "My requests" are hidden for them.
+- After `noOfferHelpMinutes` (default 5) of searching with no offer, the
+  owner's tracking page shows "Call us" with `hotlinePhone` (default
+  0981488760) and WhatsApp. Both are in admin Settings > Contact.
+- The floating WhatsApp button uses the real WhatsApp glyph.
+
 ## Push notifications (added 2026-10-03)
 
 Web Push through the service worker; works in Chrome/Android in the browser

@@ -1,6 +1,6 @@
-import { MessageCircle } from "lucide-react";
 import { getTranslations } from "next-intl/server";
 
+import { WhatsAppIcon } from "@/components/ui/WhatsAppIcon";
 import { getBusinessPhones, isWhatsappEnabled } from "@/features/settings/queries";
 import { normalizeSyrianPhone } from "@/lib/phone";
 
@@ -37,7 +37,7 @@ export async function WhatsAppButton() {
       aria-label={t("whatsapp")}
       className="fixed bottom-4 end-4 z-40 inline-flex min-h-touch min-w-touch items-center gap-2 rounded-full bg-success px-4 py-3 font-bold text-white shadow-card transition-transform hover:scale-105"
     >
-      <MessageCircle aria-hidden="true" className="h-5 w-5" />
+      <WhatsAppIcon className="h-6 w-6" />
       <span className="hidden sm:inline">{t("whatsapp")}</span>
     </a>
   );
