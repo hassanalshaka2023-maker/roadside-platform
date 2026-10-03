@@ -24,7 +24,7 @@ Request statuses: SEARCHING, CONFIRMED, ON_THE_WAY, ARRIVED, IN_PROGRESS, AWAITI
 - Validation: zod on every input
 - i18n: next-intl. Arabic (RTL) is the default language, English is secondary
 - Deploy: Docker + docker-compose on a VPS
-- PWA (later phase)
+- PWA: manifest + service worker (see docs/STATUS.md, 2026-10-03)
 
 ## Conventions
 - Feature-based folder structure, small reusable components, typed API layer

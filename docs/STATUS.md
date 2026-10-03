@@ -1,6 +1,6 @@
 # Project status
 
-Last updated: 2026-09-28. Keep this file current: it is how work resumes
+Last updated: 2026-10-03. Keep this file current: it is how work resumes
 without losing context.
 
 ## Decisions in force (2026-09-25)
@@ -21,6 +21,31 @@ without losing context.
   The exact map pin, photos, plate and the customer's name and phone stay
   hidden until the customer accepts that provider's offer. The request form
   tells the customer this under the location fields.
+
+## Installable app (PWA) and lasting sign-in (added 2026-10-03)
+
+Providers complained they had to sign in every time. Decision: a PWA inside
+this project, not a native app for now (React Native / store listing stays an
+option for later).
+
+- **Sessions slide.** Customer/provider sessions renew (at most once a day)
+  while used; `SESSION_TTL_CUSTOMER_DAYS` (30) is now an *idle* timeout.
+  Their cookie lives 400 days because a page render cannot rewrite cookies;
+  the database row decides expiry. Logic in `src/lib/auth/session-renewal.ts`.
+  (This also fixed the admin renewal, which tried to set a cookie during
+  page renders, where Next.js forbids it.)
+- **Install.** `src/app/manifest.ts`, icons in `public/icons/` (regenerate
+  with `node scripts/generate-pwa-icons.mjs`), `public/sw.js` (production
+  only; never caches pages, cache-first for `/_next/static`, offline page
+  `public/offline.html`). Bump `VERSION` in sw.js after changing it.
+- **Install banner** (`InstallAppBanner`) on the provider area and the
+  customer account page: Android gets the browser's install dialog, iPhone gets
+  Share -> Add to Home Screen steps. Hidden once installed; "not now" hides it
+  for 14 days.
+- Links opened inside WhatsApp/Facebook keep their own cookies; installing the
+  app (and signing in once inside it) is the fix to tell providers about.
+- Not yet: push notifications from the installed app (needs VAPID keys and a
+  subscription table) - the natural next step for the notifications item below.
 
 ## Email sign-in (added 2026-09-26)
 
@@ -100,4 +125,4 @@ later by phone creates two accounts.
 - Committed e2e suite (Playwright) and CI.
 - Admin UI to create more admin accounts (today: seed / `.env`). Each admin
   already changes their own email and password at `/admin/account`.
-- PWA, performance pass.
+- Push notifications through the installed PWA; performance pass.

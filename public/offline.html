@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#0B0B0F" />
+    <title>لا يوجد اتصال - نجدة الطريق 24</title>
+    <!--
+      Shown by the service worker (public/sw.js) when a page cannot be loaded.
+      Self-contained on purpose: no scripts, no external requests, so it works
+      with no network at all.
+    -->
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100dvh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px 16px;
+        background: #0b0b0f;
+        color: #fff;
+        font-family: system-ui, -apple-system, "Segoe UI", Tahoma, sans-serif;
+        text-align: center;
+      }
+      main { max-width: 420px; }
+      img { width: 180px; height: auto; }
+      h1 { margin: 24px 0 8px; font-size: 22px; color: #ffd400; }
+      p { margin: 0 0 8px; line-height: 1.7; color: #d1d5db; }
+      .en { direction: ltr; font-size: 14px; color: #9ca3af; }
+      a.button {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 48px;
+        margin-top: 20px;
+        padding: 0 28px;
+        border-radius: 12px;
+        background: #ffd400;
+        color: #0b0b0f;
+        font-weight: 800;
+        font-size: 17px;
+        text-decoration: none;
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <img src="/brand/logo-180.webp" alt="نجدة الطريق 24" width="180" height="120" />
+      <h1>لا يوجد اتصال بالإنترنت</h1>
+      <p>تأكّد من الشبكة ثم أعد المحاولة. إذا كنت بحاجة لمساعدة عاجلة، اتصل بنا مباشرة.</p>
+      <p class="en">You are offline. Check your connection and try again.</p>
+      <a class="button" href="/">إعادة المحاولة · Retry</a>
+    </main>
+  </body>
+</html>

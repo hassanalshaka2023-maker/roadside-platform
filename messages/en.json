@@ -998,5 +998,19 @@
   "otpEmail": {
     "subject": "Your Najdat Al-Tariq 24 sign-in code",
     "body": "Your Najdat Al-Tariq 24 code is {code}\n\nValid for {minutes} minutes. Do not share it.\n\nIf you did not ask for this code, ignore this email."
+  },
+  "pwa": {
+    "title": "Install the Najdat Al-Tariq app",
+    "text": "Open it straight from its icon and stay signed in without entering your account again",
+    "install": "Install",
+    "notNow": "Not now",
+    "ios": {
+      "title": "Install the app on iPhone",
+      "step1": "Tap the Share button at the bottom of Safari",
+      "step2": "Choose “Add to Home Screen”",
+      "step3": "Tap “Add” and the Najdat Al-Tariq icon appears on your screen",
+      "safariOnly": "If you opened the site from a WhatsApp or Facebook link, open it in Safari first, then follow the steps. After installing, sign in once inside the app.",
+      "done": "Got it"
+    }
   }
 }

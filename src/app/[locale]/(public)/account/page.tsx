@@ -1,6 +1,7 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { getFormatter, getTranslations, setRequestLocale } from "next-intl/server";
 
+import { InstallAppBanner } from "@/components/pwa/InstallAppBanner";
 import { Badge } from "@/components/ui/Badge";
 import { Card, CardBody, CardHeader, CardTitle } from "@/components/ui/Card";
 import { Money } from "@/components/ui/Money";
@@ -43,6 +44,8 @@ export default async function AccountPage({ params }: { params: Promise<{ locale
     <div className="container max-w-2xl py-10">
       <h1 className="text-2xl">{t("account.title")}</h1>
       <p className="mb-6 mt-2 text-sm text-gray-600">{t("account.subtitle")}</p>
+
+      <InstallAppBanner className="mb-6" />
 
       <Card>
         <CardBody className="flex flex-col gap-4">

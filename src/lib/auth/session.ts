@@ -8,6 +8,9 @@
  * while in use) because an admin can read ID documents; customers and
  * providers get 30 days because re-authenticating by SMS on a bad connection
  * at the roadside is exactly the wrong moment to ask for a code.
+ *
+ * Both are IDLE timeouts: a session slides forward while it is used (see
+ * ./session-renewal.ts), so someone who opens the app regularly signs in once.
  */
 import "server-only";
 
@@ -17,6 +20,7 @@ import { sha256, randomToken, hashIp } from "../crypto";
 import { prisma } from "../db";
 import { env, isProduction } from "../env";
 import { loggerFor } from "../logger";
+import { cookieExpiry, renewalDue } from "./session-renewal";
 
 const log = loggerFor("auth/session");
 
@@ -65,7 +69,7 @@ export async function createSession(
     secure: isProduction,
     sameSite: "lax",
     path: "/",
-    expires: expiresAt,
+    expires: cookieExpiry(expiresAt, isAdmin),
   });
 
   log.info({ userId, isAdmin }, "session created");
@@ -106,19 +110,22 @@ export async function readSessionFromCookie(): Promise<ActiveSession | null> {
 }
 
 /**
- * Sliding renewal for admin sessions: while an admin keeps working, the
- * 8-hour window moves with them; once they stop, it expires on schedule.
- * Only extends past the halfway point, to avoid a write on every request.
+ * Sliding renewal: while someone keeps using the app, their session's expiry
+ * moves with them; once they stop, it expires on schedule. Admins renew past
+ * the halfway point of 8 hours; customers and providers at most once a day.
+ *
+ * The cookie is refreshed only where Next.js allows it (server actions and
+ * route handlers). During a plain page render the write throws and is
+ * skipped - harmless, because a non-admin cookie already outlives the
+ * session (see cookieExpiry) and the database row is what counts.
  */
 export async function touchSession(
   session: ActiveSession,
   isAdmin: boolean,
 ): Promise<void> {
-  if (!isAdmin) return;
-
-  const ttl = ttlMsFor(true);
+  const ttl = ttlMsFor(isAdmin);
   const remaining = session.expiresAt.getTime() - Date.now();
-  if (remaining > ttl / 2) return;
+  if (!renewalDue(remaining, ttl, isAdmin)) return;
 
   const expiresAt = new Date(Date.now() + ttl);
   await prisma.session.update({
@@ -126,16 +133,20 @@ export async function touchSession(
     data: { expiresAt },
   });
 
-  const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE)?.value;
-  if (token) {
-    cookieStore.set(SESSION_COOKIE, token, {
-      httpOnly: true,
-      secure: isProduction,
-      sameSite: "lax",
-      path: "/",
-      expires: expiresAt,
-    });
+  try {
+    const cookieStore = await cookies();
+    const token = cookieStore.get(SESSION_COOKIE)?.value;
+    if (token) {
+      cookieStore.set(SESSION_COOKIE, token, {
+        httpOnly: true,
+        secure: isProduction,
+        sameSite: "lax",
+        path: "/",
+        expires: cookieExpiry(expiresAt, isAdmin),
+      });
+    }
+  } catch {
+    // Rendering a server component: cookies are read-only there.
   }
 }
 

@@ -5,6 +5,7 @@ import { Logo } from "@/components/ui/Logo";
 import { LogoutButton } from "@/features/auth/components/LogoutButton";
 import { Link } from "@/i18n/navigation";
 import { ProviderTabs } from "@/components/layout/ProviderTabs";
+import { InstallAppBanner } from "@/components/pwa/InstallAppBanner";
 import { requireRole } from "@/lib/auth/current-user";
 
 /**
@@ -51,7 +52,10 @@ export default async function ProviderLayout({
 
       <main className="flex-1 bg-gray-50 p-4">
         <h1 className="sr-only">{t("title")}</h1>
-        <div className="mx-auto max-w-2xl">{children}</div>
+        <div className="mx-auto max-w-2xl">
+          <InstallAppBanner className="mb-4" />
+          {children}
+        </div>
       </main>
     </div>
   );
